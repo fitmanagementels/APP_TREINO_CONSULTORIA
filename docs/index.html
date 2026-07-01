@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Docs | App Ficha de Treino</title>
+    <style>
+      :root {
+        --bg: #090b0f;
+        --panel: #11151d;
+        --panel-strong: #161d27;
+        --line: #263142;
+        --line-soft: rgba(255, 255, 255, 0.08);
+        --text: #edf3f7;
+        --muted: #8c9baa;
+        --soft: #c9d4dc;
+        --green: #45f076;
+        --cyan: #59c7ff;
+        --amber: #f2c14e;
+        --rose: #ff6f91;
+        --shadow: 0 22px 70px rgba(0, 0, 0, 0.38);
+        --radius: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(135deg, rgba(69, 240, 118, 0.08), transparent 32%),
+          linear-gradient(225deg, rgba(89, 199, 255, 0.08), transparent 30%),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          "Aptos",
+          "Segoe UI",
+          sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 24px;
+        border-right: 1px solid var(--line-soft);
+        background: rgba(9, 11, 15, 0.86);
+        backdrop-filter: blur(18px);
+        overflow-y: auto;
+      }
+
+      .brand {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 24px;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(69, 240, 118, 0.36);
+        border-radius: var(--radius);
+        background: rgba(69, 240, 118, 0.12);
+        color: var(--green);
+        font-weight: 900;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 22px;
+        line-height: 1.12;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(17, 21, 29, 0.8);
+      }
+
+      .search span {
+        color: var(--cyan);
+      }
+
+      .search input {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+      }
+
+      .search input::placeholder {
+        color: var(--muted);
+      }
+
+      .nav-title {
+        margin: 22px 0 10px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .doc-list,
+      .section-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .doc-button,
+      .section-link,
+      .chip {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(17, 21, 29, 0.64);
+        color: var(--soft);
+      }
+
+      .doc-button {
+        width: 100%;
+        padding: 12px;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          background 0.18s ease,
+          border-color 0.18s ease,
+          transform 0.18s ease;
+      }
+
+      .doc-button:hover,
+      .doc-button.active {
+        border-color: rgba(69, 240, 118, 0.55);
+        background: rgba(69, 240, 118, 0.1);
+      }
+
+      .doc-button:hover {
+        transform: translateY(-1px);
+      }
+
+      .doc-name {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .doc-meta {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .section-link {
+        display: block;
+        padding: 9px 10px;
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+        transition:
+          color 0.18s ease,
+          border-color 0.18s ease,
+          background 0.18s ease;
+      }
+
+      .section-link:hover {
+        border-color: rgba(89, 199, 255, 0.55);
+        background: rgba(89, 199, 255, 0.08);
+        color: var(--text);
+      }
+
+      main {
+        padding: 18px 32px 32px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+        max-width: 1120px;
+        margin: 0 auto 14px;
+      }
+
+      .eyebrow {
+        margin-bottom: 6px;
+        color: var(--green);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .page-title {
+        max-width: 760px;
+        font-size: clamp(24px, 3vw, 38px);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      .page-copy {
+        max-width: 620px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .reader {
+        max-width: 1120px;
+        margin: 0 auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(17, 21, 29, 0.78);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .reader-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(22, 29, 39, 0.86);
+      }
+
+      .reader-title {
+        font-size: 22px;
+        line-height: 1.2;
+      }
+
+      .reader-side {
+        display: grid;
+        justify-items: end;
+        gap: 10px;
+      }
+
+      .reader-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .action-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 34px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 8px 10px;
+        background: rgba(9, 11, 15, 0.42);
+        color: var(--soft);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        transition:
+          background 0.18s ease,
+          border-color 0.18s ease,
+          color 0.18s ease,
+          transform 0.18s ease;
+      }
+
+      .action-button:hover {
+        border-color: rgba(69, 240, 118, 0.55);
+        background: rgba(69, 240, 118, 0.1);
+        color: var(--text);
+        transform: translateY(-1px);
+      }
+
+      .action-icon {
+        color: var(--green);
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: flex-start;
+        justify-content: flex-end;
+      }
+
+      .chip {
+        padding: 7px 9px;
+        color: var(--soft);
+        font-size: 12px;
+      }
+
+      .chip.green {
+        border-color: rgba(69, 240, 118, 0.44);
+        color: var(--green);
+      }
+
+      .chip.cyan {
+        border-color: rgba(89, 199, 255, 0.44);
+        color: var(--cyan);
+      }
+
+      .chip.amber {
+        border-color: rgba(242, 193, 78, 0.44);
+        color: var(--amber);
+      }
+
+      .content {
+        display: grid;
+        gap: 18px;
+        padding: 20px;
+      }
+
+      .doc-section {
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: rgba(9, 11, 15, 0.32);
+        overflow: hidden;
+        transition:
+          border-color 0.18s ease,
+          background 0.18s ease;
+      }
+
+      .doc-section[open] {
+        border-color: rgba(69, 240, 118, 0.3);
+        background: rgba(9, 11, 15, 0.48);
+      }
+
+      .doc-section summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+
+      .doc-section summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .section-title-text {
+        color: var(--green);
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .section-toggle {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        color: var(--cyan);
+        font-size: 18px;
+        transition:
+          transform 0.18s ease,
+          border-color 0.18s ease;
+      }
+
+      .doc-section[open] .section-toggle {
+        border-color: rgba(89, 199, 255, 0.48);
+        transform: rotate(45deg);
+      }
+
+      .section-body {
+        padding: 0 18px 18px;
+      }
+
+      .doc-section h3 {
+        margin: 18px 0 10px;
+        color: var(--cyan);
+        font-size: 16px;
+        letter-spacing: 0;
+      }
+
+      .doc-section p {
+        margin: 10px 0;
+        color: var(--soft);
+        line-height: 1.68;
+      }
+
+      .doc-section ul,
+      .doc-section ol {
+        margin: 10px 0 12px;
+        padding-left: 20px;
+        color: var(--soft);
+        line-height: 1.65;
+      }
+
+      .doc-section li {
+        margin: 6px 0;
+      }
+
+      code {
+        padding: 2px 6px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.28);
+        color: var(--amber);
+        font-family:
+          "Cascadia Code",
+          Consolas,
+          monospace;
+        font-size: 0.92em;
+      }
+
+      mark {
+        border-radius: 4px;
+        background: rgba(242, 193, 78, 0.22);
+        color: var(--text);
+      }
+
+      .empty {
+        display: none;
+        padding: 24px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .empty.show {
+        display: block;
+      }
+
+      @media (max-width: 920px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          position: relative;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line-soft);
+        }
+
+        main {
+          padding: 22px 16px;
+        }
+
+        .topbar,
+        .reader-head {
+          display: grid;
+        }
+
+        .chips {
+          justify-content: flex-start;
+        }
+
+        .reader-side {
+          justify-items: start;
+        }
+
+        .reader-actions {
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">XS</div>
+          <h1>Central de docs</h1>
+          <p class="subtitle">
+            Navegue pelos registros do projeto, pontos tecnicos e proximas
+            melhorias sem precisar abrir cada Markdown manualmente.
+          </p>
+        </div>
+
+        <label class="search" for="searchInput">
+          <span>⌕</span>
+          <input id="searchInput" type="search" placeholder="Buscar nos docs" />
+        </label>
+
+        <div class="nav-title">Documentos</div>
+        <div class="doc-list" id="docList"></div>
+
+        <div class="nav-title">Secoes do documento</div>
+        <div class="section-list" id="sectionList"></div>
+      </aside>
+
+      <main>
+        <section class="topbar">
+          <div>
+            <div class="eyebrow">App ficha de treino</div>
+            <h2 class="page-title">Documentacao viva do projeto</h2>
+            <p class="page-copy">
+              Um painel escaneavel para entender arquitetura, historico,
+              status atual e proximas melhorias do Web App em Apps Script.
+            </p>
+          </div>
+        </section>
+
+        <article class="reader">
+          <header class="reader-head">
+            <div>
+              <div class="eyebrow" id="docCategory">Documento</div>
+              <h2 class="reader-title" id="docTitle">Carregando</h2>
+            </div>
+            <div class="reader-side">
+              <div class="reader-actions">
+                <button class="action-button" id="downloadDocButton" type="button">
+                  <span class="action-icon">↓</span>
+                  Baixar .md
+                </button>
+                <button class="action-button" id="expandAllButton" type="button">
+                  <span class="action-icon">+</span>
+                  Expandir
+                </button>
+                <button class="action-button" id="collapseAllButton" type="button">
+                  <span class="action-icon">−</span>
+                  Recolher
+                </button>
+              </div>
+              <div class="chips" id="docTags"></div>
+            </div>
+          </header>
+          <div class="content" id="docContent"></div>
+          <div class="empty" id="emptyState">
+            Nenhuma secao encontrada para a busca atual.
+          </div>
+        </article>
+      </main>
+    </div>
+
+    <script>
+      const docs = [
+        {
+          id: "resumo",
+          title: "Resumo do Projeto",
+          file: "RESUMO_PROJETO.md",
+          category: "Arquitetura",
+          tags: ["visao geral", "dados", "sincronizacao"],
+          content: `# Resumo do Projeto
+
+## Visao geral
+
+Este projeto e um Web App em Google Apps Script para ficha de treino, com foco mobile e fluxo offline-first.
+
+- Backend: \`app/Código.gs\`
+- Frontend: \`app/index.html\`, \`app/script.html\`, \`app/style.html\`
+- Manifesto do Apps Script: \`app/appscript.json\`
+- Base de dados principal: planilha Google com abas \`DB_Prescricao\`, \`DB_Execucao\` e \`DB_GestaoCarga\`
+
+## Como o app funciona
+
+Ao abrir o Web App, \`doGet()\` renderiza \`index.html\`, que inclui CSS e JavaScript via \`include()\`.
+
+No carregamento da pagina:
+
+1. \`App.init()\` define a data atual, carrega pendencias do \`localStorage\`, atualiza o badge de sincronizacao e inicia a navegacao.
+2. \`fetchInitialData()\` busca dois blocos essenciais do servidor via \`google.script.run\`:
+   - prescricao
+   - historico/execucao
+3. Quando as chamadas essenciais terminam, o loader global e escondido e a tela inicial de treino e renderizada.
+4. A gestao de carga e carregada em segundo plano, sem bloquear a abertura do app.
+
+## Estrutura das telas
+
+### 1. Treino
+
+Tela principal de execucao.
+
+- Filtra por \`ficha\`, \`treino\` e \`data\`
+- Renderiza exercicios da prescricao da semana ativa
+- Permite adicionar/remover series por exercicio
+- Salva carga, repeticoes e RIR no \`localStorage\`
+- Gera \`id_sessao\` por exercicio/semana/data/serie
+- Tenta sincronizar com a planilha quando ha internet
+
+### 2. Prescricao
+
+Mostra a ficha organizada por treino e semana.
+
+- Agrupa por \`id_treino\`
+- Exibe sets, reps, descanso e observacoes
+- Compartilha o filtro de ficha com a tela de treino
+
+### 3. Historico
+
+Mostra as execucoes agrupadas por data.
+
+- Cada card resume volume total, numero de exercicios e numero de series
+- Ao abrir o modal, exibe detalhes por exercicio e serie
+
+### 4. Carga
+
+Dashboard visual calculado a partir do historico.
+
+- KPIs de volume, RPE medio, volume acumulado e total de sessoes
+- Grafico de volume por sessao
+- Grafico de carga geral
+- Grafico de progressao por exercicio com selecao de ate 3 exercicios
+
+## Modelo de dados identificado
+
+### DB_Prescricao
+
+Cabecalho atual da planilha-base:
+
+- \`id_ficha\`
+- \`id_treino\`
+- \`id_exercicio\`
+- \`observacoes\`
+- \`ordem_exercicio\`
+- \`semana_1_sets\`
+- \`semana_1_reps\`
+- \`semana_1_descanso\`
+- \`semana_2_sets\`
+- \`semana_2_reps\`
+- \`semana_2_descanso\`
+- \`semana_3_sets\`
+- \`semana_3_reps\`
+- \`semana_3_descanso\`
+- \`semana_4_sets\`
+- \`semana_4_reps\`
+- \`semana_4_descanso\`
+
+### DB_Execucao
+
+Esperada pelo backend:
+
+- \`id_sessao\`
+- \`data_treino\`
+- \`id_exercicio\`
+- \`semana_referencia\`
+- \`carga_absoluta\`
+- \`reps_executadas\`
+- \`rir\`
+- \`rpe_sessao\`
+- \`sync_status\`
+
+### DB_GestaoCarga
+
+Gerada/atualizada no backend com resumo por sessao:
+
+- \`data_sessao\`
+- \`exercicio_principal\`
+- \`volume_load\`
+- \`e1RM\`
+- \`rpe_sessao_agregado\`
+
+## Fluxo de sincronizacao
+
+O app guarda execucoes localmente em \`xs_pending\`.
+
+- Ao registrar uma serie, cria um objeto com \`sync_status: "pending"\`
+- O badge mostra quantos registros ainda nao foram sincronizados
+- \`syncToServer()\` envia apenas itens pendentes
+- O backend faz upsert na aba \`DB_Execucao\`
+- Depois do sucesso, os itens locais passam para \`sync_status: "clean"\`
+
+## Observacoes importantes encontradas
+
+- O projeto mistura dois modelos de schema da prescricao: um antigo sem \`id_ficha\` e o atual com \`id_ficha\`
+- A tela de carga hoje usa \`historicoCache\` no frontend, mesmo havendo uma rota/back-end especifica de gestao de carga
+- O backend recalcula e tenta escrever \`DB_GestaoCarga\` durante a leitura de dados da carga
+
+## Correcao aplicada para o "carregamento infinito"
+
+O loader deixou de depender da chamada de gestao de carga. Agora ele depende apenas de prescricao e historico, que sao os dados essenciais para abrir a tela de treino.
+
+Tambem foram aplicados ajustes defensivos:
+
+- timeout de 12 segundos com fallback para cache local
+- leitura segura do \`localStorage\`
+- carregamento de gestao de carga em segundo plano
+- \`clientGetGestaoCarga()\` sem escrita automatica em \`DB_GestaoCarga\`
+- \`setupDatabase()\` alinhado ao schema atual com \`id_ficha\`
+- \`id_sessao\` incluindo ficha e treino para reduzir colisao entre treinos
+- RPE alterado apos sincronizacao volta para \`pending\` e pode ser reenviado
+
+## Proximos passos
+
+- publicar nova versao do Web App no Apps Script
+- testar abertura inicial com a planilha real
+- testar registro de serie, RPE e sincronizacao
+- criar documentacao de deploy do Apps Script`,
+        },
+        {
+          id: "historico",
+          title: "Historico, Status e Proximas Atualizacoes",
+          file: "HISTORICO_STATUS_PROJETO.md",
+          category: "Status",
+          tags: ["historico", "status", "roadmap"],
+          content: `# Historico, Status e Proximas Atualizacoes
+
+## Historico do projeto
+
+Este documento registra o que ja foi feito no projeto da ficha de treino em Google Apps Script e serve como memoria de trabalho para as proximas etapas.
+
+### 1. Importacao dos arquivos do app
+
+O projeto recebeu os arquivos de um Web App criado em Google Apps Script:
+
+- \`app/appscript.json\`
+- \`app/Código.gs\`
+- \`app/index.html\`
+- \`app/script.html\`
+- \`app/style.html\`
+
+Esses arquivos formam uma aplicacao mobile-first para prescricao e execucao de treinos, usando uma planilha Google como base de dados.
+
+### 2. Identificacao da base de dados
+
+Foi analisada a planilha-base usada pelo app. A aba principal de prescricao usa o seguinte modelo:
+
+- \`id_ficha\`
+- \`id_treino\`
+- \`id_exercicio\`
+- \`observacoes\`
+- \`ordem_exercicio\`
+- campos semanais de sets, reps e descanso para as semanas 1 a 4
+
+Tambem foi identificado que o app espera abas auxiliares para execucao e gestao de carga:
+
+- \`DB_Execucao\`
+- \`DB_GestaoCarga\`
+
+### 3. Entendimento da arquitetura
+
+O projeto foi mapeado em tres partes principais:
+
+- Backend em Google Apps Script, responsavel por ler e gravar dados na planilha.
+- Frontend HTML/CSS/JS, responsavel pela interface mobile e fluxo offline-first.
+- Documentacao local em Markdown, para manter entendimento e decisoes do projeto.
+
+### 4. Resumo tecnico inicial
+
+Foi criado o arquivo \`RESUMO_PROJETO.md\`, contendo:
+
+- visao geral do app
+- estrutura das telas
+- modelo de dados identificado
+- fluxo de sincronizacao
+- hipoteses para o erro de carregamento infinito
+- proximos passos tecnicos
+
+### 5. Revisao inicial de riscos
+
+Na primeira revisao do codigo, foram encontrados pontos importantes:
+
+- o carregamento inicial depende de tres chamadas assicronas, incluindo uma chamada de gestao de carga que nao e essencial para abrir a tela principal
+- existem sinais de schema antigo e schema novo misturados na prescricao
+- \`setupDatabase()\` cria \`DB_Prescricao\` sem \`id_ficha\`, mas a planilha atual usa \`id_ficha\`
+- o RPE pode ser perdido se a sincronizacao acontecer antes do usuario confirmar o RPE da sessao
+- o \`id_sessao\` nao inclui \`id_ficha\` nem \`id_treino\`, podendo causar colisao entre treinos
+
+### 6. Reorganizacao das pastas
+
+O projeto foi reorganizado em duas pastas:
+
+- \`app/\`: arquivos de codigo do Web App
+- \`docs/\`: arquivos explicativos e documentacao do projeto
+
+### 7. Correcao do carregamento infinito
+
+Foi criada uma suite de regressao local em \`tests/app-regression.test.js\` e o fluxo de carregamento foi ajustado.
+
+Mudancas principais:
+
+- \`fetchInitialData()\` agora libera a tela com prescricao e historico
+- gestao de carga passou a carregar em segundo plano
+- o loader tem fallback por timeout usando cache local
+- leituras de \`localStorage\` ficaram protegidas contra JSON invalido
+- \`setupDatabase()\` foi alinhado ao schema atual de \`DB_Prescricao\` com \`id_ficha\`
+- \`clientGetGestaoCarga()\` deixou de escrever em \`DB_GestaoCarga\` durante o boot
+- \`id_sessao\` passou a incluir ficha e treino
+- RPE alterado depois da sincronizacao volta para \`pending\`
+
+## Status atual
+
+No momento, o carregamento infinito foi tratado no codigo e validado por testes locais de regressao e sintaxe.
+
+O foco atual e:
+
+- publicar a versao atualizada no Apps Script
+- testar com a planilha real
+- validar abertura inicial, registro de series, RPE e sincronizacao
+- continuar usando \`docs/\` como memoria viva do projeto
+
+## Arquivos atuais
+
+### Codigo do app
+
+- \`app/appscript.json\`
+- \`app/Código.gs\`
+- \`app/index.html\`
+- \`app/script.html\`
+- \`app/style.html\`
+- \`tests/app-regression.test.js\`
+
+### Documentacao
+
+- \`docs/RESUMO_PROJETO.md\`
+- \`docs/HISTORICO_STATUS_PROJETO.md\`
+- \`docs/index.html\`
+
+## Atualizacoes futuras recomendadas
+
+### Prioridade alta
+
+- publicar nova versao do Web App no Apps Script
+- testar a abertura inicial na URL publicada
+- testar registro de serie e sincronizacao com \`DB_Execucao\`
+- testar RPE depois de uma sincronizacao ja concluida
+
+### Prioridade media
+
+- separar melhor dados pendentes, dados sincronizados e historico vindo da planilha
+- melhorar mensagens de erro para o usuario final
+- criar uma acao explicita para atualizar \`DB_GestaoCarga\` quando necessario
+
+### Prioridade baixa
+
+- criar uma rotina de diagnostico para validar abas e colunas da planilha
+- criar uma documentacao de deploy do Apps Script
+- padronizar nomes de arquivos sem acentos, caso isso ajude ferramentas externas
+- evoluir o visualizador de docs para carregar novos documentos automaticamente quando usado com servidor local
+
+## Proximo passo tecnico sugerido
+
+O proximo trabalho tecnico sugerido e publicar e testar a versao corrigida no ambiente real do Apps Script:
+
+- abrir o Web App publicado
+- confirmar que o loader some mesmo se gestao de carga demorar
+- registrar uma serie em um treino
+- finalizar a sessao com RPE
+- conferir a linha criada/atualizada em \`DB_Execucao\``,
+        },
+        {
+          id: "ia-hibrida",
+          title: "Arquitetura de IA Hibrida",
+          file: "ARQUITETURA_IA_HIBRIDA.md",
+          category: "IA e Memoria",
+          tags: ["ia", "memoria", "planilha", "custo zero"],
+          content: `# Arquitetura de IA Hibrida e Memoria do App
+
+## Decisao principal
+
+Vamos usar uma arquitetura hibrida: regras deterministicas no Apps Script, memoria estruturada na planilha e IA apenas quando o usuario pedir um relatorio. A regra maxima continua sendo custo zero.
+
+## Uso da IA
+
+A IA nao participa do uso normal do app. Registrar treino, sincronizar series, abrir historico e ver carga continuam funcionando sem IA. A IA entra somente por uma acao explicita, como um botao de relatorio.
+
+## Estrutura da planilha
+
+Abas principais: DB_Prescricao, DB_Execucao e DB_GestaoCarga. Abas de memoria: DB_MemoriaBase, DB_MemoriaExercicio e DB_Insights. Abas manuais fora da lista gerenciada nao devem ser apagadas nem alteradas pelo setupDatabase.
+
+## setupDatabase seguro
+
+O setupDatabase cria abas gerenciadas se faltarem, acrescenta colunas ausentes e formata a linha de cabecalho. Ele nao limpa dados, nao recria abas destrutivamente e nao mexe em abas manuais.
+
+## Camadas do app
+
+Camada 1: uso normal e sincronizacao. Camada 2: DB_GestaoCarga como cache de sessao. Camada 3: memoria estruturada em snapshots. Camada 4: IA sob demanda usando contexto compacto.
+
+## Como a memoria sera formada
+
+O app guarda variaveis calculadas por regras: volume total, RPE medio, frequencia, melhor carga, melhor e1RM estimado, variacoes, recordes, quedas, estagnacoes e alertas simples. A IA interpreta snapshots prontos, nao milhares de celulas brutas.
+
+## Performance
+
+O carregamento inicial continua leve. Gestao de carga, memoria e IA rodam em segundo plano ou por acao explicita. Respostas de IA ficam cacheadas em DB_Insights para evitar chamadas repetidas.
+
+## Filtros de relatorio
+
+Os relatorios devem suportar ultima semana, ultimos 30 dias, ultimos 90 dias e periodo personalizado com data inicial e final.
+
+## Estado atual
+
+Implementado: setupDatabase seguro, contrato das abas de memoria, DB_GestaoCarga como cache por sessao, atualizacao por upsert e testes locais de regressao. Ainda falta implementar a tela final de relatorios e a chamada real para Gemini.`,
+        },
+      ];
+
+      const state = {
+        activeDocId: docs[0].id,
+        query: "",
+        openSectionsByDoc: {},
+      };
+
+      const docList = document.getElementById("docList");
+      const sectionList = document.getElementById("sectionList");
+      const docTitle = document.getElementById("docTitle");
+      const docCategory = document.getElementById("docCategory");
+      const docTags = document.getElementById("docTags");
+      const docContent = document.getElementById("docContent");
+      const emptyState = document.getElementById("emptyState");
+      const searchInput = document.getElementById("searchInput");
+      const downloadDocButton = document.getElementById("downloadDocButton");
+      const expandAllButton = document.getElementById("expandAllButton");
+      const collapseAllButton = document.getElementById("collapseAllButton");
+
+      function escapeHtml(value) {
+        return value
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function slugify(value) {
+        return value
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "");
+      }
+
+      function inlineMarkdown(value) {
+        let html = escapeHtml(value);
+        html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+        return html;
+      }
+
+      function escapeRegex(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function highlight(value) {
+        if (!state.query) return value;
+        const query = escapeRegex(escapeHtml(state.query));
+        const pattern = new RegExp(`(${query})`, "gi");
+        return value.replace(pattern, "<mark>$1</mark>");
+      }
+
+      function parseSections(markdown) {
+        const lines = markdown.split("\n");
+        const sections = [];
+        let current = null;
+
+        lines.forEach((line) => {
+          if (line.startsWith("## ")) {
+            if (current) sections.push(current);
+            const title = line.replace(/^##\s+/, "").trim();
+            current = {
+              title,
+              id: slugify(title),
+              lines: [],
+            };
+            return;
+          }
+
+          if (!current && line.startsWith("# ")) return;
+          if (current) current.lines.push(line);
+        });
+
+        if (current) sections.push(current);
+        return sections;
+      }
+
+      function renderMarkdown(lines) {
+        let html = "";
+        let listType = null;
+
+        function closeList() {
+          if (listType) {
+            html += `</${listType}>`;
+            listType = null;
+          }
+        }
+
+        lines.forEach((line) => {
+          const trimmed = line.trim();
+
+          if (!trimmed) {
+            closeList();
+            return;
+          }
+
+          if (trimmed.startsWith("### ")) {
+            closeList();
+            html += `<h3>${highlight(inlineMarkdown(trimmed.slice(4)))}</h3>`;
+            return;
+          }
+
+          if (/^\d+\.\s+/.test(trimmed)) {
+            if (listType !== "ol") {
+              closeList();
+              listType = "ol";
+              html += "<ol>";
+            }
+            html += `<li>${highlight(inlineMarkdown(trimmed.replace(/^\d+\.\s+/, "")))}</li>`;
+            return;
+          }
+
+          if (trimmed.startsWith("- ")) {
+            if (listType !== "ul") {
+              closeList();
+              listType = "ul";
+              html += "<ul>";
+            }
+            html += `<li>${highlight(inlineMarkdown(trimmed.slice(2)))}</li>`;
+            return;
+          }
+
+          closeList();
+          html += `<p>${highlight(inlineMarkdown(trimmed))}</p>`;
+        });
+
+        closeList();
+        return html;
+      }
+
+      function activeDoc() {
+        return docs.find((doc) => doc.id === state.activeDocId) || docs[0];
+      }
+
+      function getOpenSectionsForDoc(docId) {
+        if (!state.openSectionsByDoc[docId]) {
+          state.openSectionsByDoc[docId] = new Set();
+        }
+
+        return state.openSectionsByDoc[docId];
+      }
+
+      function renderDocList() {
+        docList.innerHTML = docs
+          .map((doc) => {
+            const active = doc.id === state.activeDocId ? " active" : "";
+            return `<button class="doc-button${active}" type="button" data-doc="${doc.id}">
+              <span class="doc-name">${doc.title}</span>
+              <span class="doc-meta">${doc.file}</span>
+            </button>`;
+          })
+          .join("");
+
+        docList.querySelectorAll("button").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.activeDocId = button.dataset.doc;
+            render();
+          });
+        });
+      }
+
+      function renderReader() {
+        const doc = activeDoc();
+        const docOpenSections = getOpenSectionsForDoc(doc.id);
+        const sections = parseSections(doc.content);
+        const query = state.query.toLowerCase();
+        const visibleSections = query
+          ? sections.filter((section) => {
+              const haystack = `${section.title}\n${section.lines.join("\n")}`;
+              return haystack.toLowerCase().includes(query);
+            })
+          : sections;
+
+        docTitle.textContent = doc.title;
+        docCategory.textContent = doc.category;
+        docTags.innerHTML = doc.tags
+          .map((tag, index) => {
+            const tone = ["green", "cyan", "amber"][index % 3];
+            return `<span class="chip ${tone}">${tag}</span>`;
+          })
+          .join("");
+
+        sectionList.innerHTML = sections
+          .map((section) => {
+            return `<a class="section-link" href="#${section.id}" data-section="${section.id}">${section.title}</a>`;
+          })
+          .join("");
+
+        docContent.innerHTML = visibleSections
+          .map((section) => {
+            const isOpen = state.query ? " open" : docOpenSections.has(section.id) ? " open" : "";
+            return `<details class="doc-section" id="${section.id}"${isOpen}>
+              <summary>
+                <span class="section-title-text">${highlight(inlineMarkdown(section.title))}</span>
+                <span class="section-toggle">+</span>
+              </summary>
+              <div class="section-body">
+                ${renderMarkdown(section.lines)}
+              </div>
+            </details>`;
+          })
+          .join("");
+
+        sectionList.querySelectorAll(".section-link").forEach((link) => {
+          link.addEventListener("click", () => {
+            const section = document.getElementById(link.dataset.section);
+            if (section) {
+              section.open = true;
+              if (!state.query) {
+                docOpenSections.add(link.dataset.section);
+              }
+            }
+          });
+        });
+
+        docContent.querySelectorAll(".doc-section").forEach((section) => {
+          section.addEventListener("toggle", () => {
+            if (state.query) return;
+
+            if (section.open) {
+              docOpenSections.add(section.id);
+              return;
+            }
+
+            docOpenSections.delete(section.id);
+          });
+        });
+
+        emptyState.classList.toggle("show", visibleSections.length === 0);
+      }
+
+      function setAllSections(open) {
+        document.querySelectorAll(".doc-section").forEach((section) => {
+          section.open = open;
+        });
+      }
+
+      function downloadCurrentDoc() {
+        const doc = activeDoc();
+        const blob = new Blob([doc.content], {
+          type: "text/markdown;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = doc.file;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function render() {
+        renderDocList();
+        renderReader();
+      }
+
+      searchInput.addEventListener("input", (event) => {
+        state.query = event.target.value.trim();
+        renderReader();
+      });
+
+      downloadDocButton.addEventListener("click", downloadCurrentDoc);
+      expandAllButton.addEventListener("click", () => setAllSections(true));
+      collapseAllButton.addEventListener("click", () => setAllSections(false));
+
+      render();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1212 @@
+<script>
+  // =====================================================================
+  // XSTeam Wellness V2.0 — Single-Tenant | SVG Charts | Offline-First
+  // =====================================================================
+
+  const App = {
+    currentScreen: "treino",
+    currentWeek: 1,
+    prescricaoCache: [],
+    historicoCache: [],
+    cargaCache: null,
+    pendingSync: [],
+    sessionRPE: null,
+    selectedChartExercises: null,
+
+    selectedFicha: "",
+    selectedTreino: "",
+    selectedDate: "",
+    exerciseSets: {},
+
+    // ── BOOT ──
+    init() {
+      window.__xsAppBootStarted = true;
+      this.setLoaderStatus("Iniciando aplicativo...");
+      this.selectedDate = new Date().toLocaleDateString("en-CA");
+      const dInput = document.getElementById("treino-date");
+      if (dInput) dInput.value = this.selectedDate;
+
+      try {
+        this.loadPending();
+        this.updateSyncBadge();
+        this.bindNavigation();
+        this.bindSync();
+        this.bindInlineControls();
+        this.fetchInitialData();
+      } catch (err) {
+        console.error("[XSTeam init]", err);
+        this.setLoaderStatus("Erro ao iniciar. Abrindo modo seguro...");
+        this.finishInitialRender("Erro ao iniciar; usando modo seguro.");
+      }
+
+      setInterval(() => {
+        if (navigator.onLine) this.syncToServer();
+      }, 30000);
+
+      window.addEventListener("online", () =>
+        this.showToast("Conexão restaurada", "success"),
+      );
+      window.addEventListener("offline", () =>
+        this.showToast("Modo Offline ativado", "warning"),
+      );
+    },
+
+    fetchInitialData() {
+      this.setLoaderStatus("Buscando prescrição e histórico...");
+      let completed = 0;
+      let finalized = false;
+      const totalRequests = 2;
+      const checkDone = () => {
+        if (finalized) return;
+        completed++;
+        if (completed >= totalRequests) {
+          finalized = true;
+          this.finishInitialRender();
+          this.loadGestaoCargaInBackground();
+        }
+      };
+      const finishWithCache = () => {
+        const cachedPrescricao = this.readCache("xs_prescricao", []);
+        const cachedHistorico = this.readCache("xs_historico", []);
+        if (cachedPrescricao.length > 0) this.prescricaoCache = cachedPrescricao;
+        if (cachedHistorico.length > 0) this.historicoCache = cachedHistorico;
+        if (!finalized) {
+          finalized = true;
+          this.finishInitialRender();
+          this.showToast("Carregamento parcial usando dados locais", "warning");
+        }
+      };
+
+      setTimeout(finishWithCache, 12000);
+      this.callServer("getPrescricao", "clientGetPrescricao")
+        .then((data) => {
+          this.setLoaderStatus("Prescrição carregada.");
+          this.prescricaoCache = data.rows || [];
+          this.writeCache("xs_prescricao", this.prescricaoCache);
+          checkDone();
+        })
+        .catch(() => {
+          this.setLoaderStatus("Prescrição local carregada.");
+          this.prescricaoCache = this.readCache("xs_prescricao", []);
+          checkDone();
+        });
+
+      this.callServer("getHistorico", "clientGetHistorico")
+        .then((data) => {
+          this.setLoaderStatus("Histórico carregado.");
+          this.historicoCache = data.rows || [];
+          this.writeCache("xs_historico", this.historicoCache);
+          checkDone();
+        })
+        .catch(() => {
+          this.setLoaderStatus("Histórico local carregado.");
+          this.historicoCache = this.readCache("xs_historico", []);
+          checkDone();
+        });
+    },
+
+    loadGestaoCargaInBackground() {
+      this.callServer("getGestaoCarga", "clientGetGestaoCarga")
+        .then((data) => {
+          this.cargaCache = data;
+          this.writeCache("xs_carga", this.cargaCache);
+        })
+        .catch(() => {
+          this.cargaCache = this.readCache("xs_carga", null);
+        });
+    },
+
+    hideGlobalLoader() {
+      if (window.__xsReleaseLoader) {
+        window.__xsReleaseLoader("app ready");
+        return;
+      }
+      const loader = document.getElementById("global-loader");
+      if (loader) loader.classList.add("hidden");
+    },
+
+    setLoaderStatus(message) {
+      if (window.__xsSetLoaderStatus) window.__xsSetLoaderStatus(message);
+    },
+
+    buildActionUrl(action) {
+      const actionUrl = new URL(window.location.href);
+      actionUrl.hash = "";
+      actionUrl.search = "";
+      actionUrl.searchParams.set("action", action);
+      return actionUrl.toString();
+    },
+
+    fetchServerAction(action, payload) {
+      const url = this.buildActionUrl(action);
+      const options = payload
+        ? {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ action, ...payload }),
+          }
+        : {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+            },
+          };
+
+      return fetch(url, options)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((result) => {
+          if (!result || result.success === false) {
+            throw new Error((result && result.error) || `Falha em ${action}`);
+          }
+
+          return result.data !== undefined ? result.data : result;
+        });
+    },
+
+    callServer(action, googleMethod, payload) {
+      return new Promise((resolve, reject) => {
+        const fallbackToFetch = () => {
+          this.fetchServerAction(action, payload).then(resolve).catch(reject);
+        };
+
+        if (
+          window.google &&
+          google.script &&
+          google.script.run &&
+          typeof google.script.run[googleMethod] === "function"
+        ) {
+          try {
+            const runner = google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(() => fallbackToFetch());
+
+            if (payload === undefined) {
+              runner[googleMethod]();
+            } else {
+              runner[googleMethod](payload.records || payload);
+            }
+            return;
+          } catch (err) {
+            fallbackToFetch();
+            return;
+          }
+        }
+
+        fallbackToFetch();
+      });
+    },
+
+    finishInitialRender(message) {
+      try {
+        this.populateFilters();
+        this.switchScreen("treino");
+      } catch (err) {
+        console.error("[XSTeam initial render]", err);
+      } finally {
+        this.hideGlobalLoader();
+        if (message) this.showToast(message, "warning");
+      }
+    },
+
+    readCache(key, fallback) {
+      try {
+        const cached = localStorage.getItem(key);
+        return cached ? JSON.parse(cached) : fallback;
+      } catch (err) {
+        return fallback;
+      }
+    },
+
+    writeCache(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (err) {
+        // Storage can fail in private mode or when quota is full.
+      }
+    },
+
+    manualRefresh() {
+      document.getElementById("global-loader").classList.remove("hidden");
+      this.fetchInitialData();
+    },
+
+    // ── NAV ──
+    bindNavigation() {
+      document.querySelectorAll(".nav-item").forEach((item) => {
+        item.addEventListener("click", () =>
+          this.switchScreen(item.dataset.screen),
+        );
+      });
+    },
+
+    bindInlineControls() {
+      const fichaPrescricao = document.getElementById("ficha-filter-prescricao");
+      if (fichaPrescricao) {
+        fichaPrescricao.addEventListener("change", () => {
+          const fichaTreino = document.getElementById("ficha-filter");
+          if (fichaTreino) fichaTreino.value = fichaPrescricao.value;
+          this.filterFicha();
+        });
+      }
+
+      const historyModalClose = document.getElementById("history-modal-close");
+      if (historyModalClose) {
+        historyModalClose.addEventListener("click", () => {
+          document.getElementById("history-modal").classList.remove("show");
+        });
+      }
+
+      const chartSettingsClose = document.getElementById("chart-settings-close");
+      if (chartSettingsClose) {
+        chartSettingsClose.addEventListener("click", () => {
+          document.getElementById("chart-settings-modal").classList.remove("show");
+        });
+      }
+    },
+
+    switchScreen(screenId) {
+      this.currentScreen = screenId;
+      document
+        .querySelectorAll(".nav-item")
+        .forEach((n) => n.classList.remove("active"));
+      const nav = document.querySelector(
+        `.nav-item[data-screen="${screenId}"]`,
+      );
+      if (nav) nav.classList.add("active");
+
+      document
+        .querySelectorAll(".screen")
+        .forEach((s) => s.classList.remove("active"));
+      const scr = document.getElementById("screen-" + screenId);
+      if (scr) scr.classList.add("active");
+
+      if (screenId === "treino") this.loadTreino();
+      else if (screenId === "prescricao") this.loadPrescricao();
+      else if (screenId === "historico") this.loadHistorico();
+      else if (screenId === "carga") this.loadCarga();
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // TELA 1: EXECUÇÃO
+    // ═══════════════════════════════════════════════════════════
+    loadTreino() {
+      this.renderTreino();
+    },
+
+    renderTreino() {
+      const c = document.getElementById("treino-list");
+      let exs = this.prescricaoCache;
+
+      if (this.selectedFicha)
+        exs = exs.filter(
+          (e) => String(e.id_ficha) === String(this.selectedFicha),
+        );
+      if (this.selectedTreino)
+        exs = exs.filter(
+          (e) => String(e.id_treino) === String(this.selectedTreino),
+        );
+
+      if (!exs || exs.length === 0) {
+        c.innerHTML =
+          '<div class="empty-state"><div class="empty-icon">🏋️</div><div class="empty-text">Nenhum exercício prescrito</div></div>';
+        return;
+      }
+
+      const wk = this.currentWeek;
+      const sk = "semana_" + wk + "_sets";
+      const rk = "semana_" + wk + "_reps";
+      const dk = "semana_" + wk + "_descanso";
+      let html = "";
+
+      exs.forEach((ex, i) => {
+        if (!this.exerciseSets[ex.id_exercicio]) {
+          this.exerciseSets[ex.id_exercicio] = parseInt(ex[sk]) || 1;
+        }
+        const numSets = this.exerciseSets[ex.id_exercicio];
+        let setsHtml = "";
+        let allSaved = true;
+
+        for (let s = 1; s <= numSets; s++) {
+          const sid = this.genSessionId(ex, s);
+          const saved = this.getSaved(sid);
+          if (!saved) allSaved = false;
+          setsHtml += `
+          <div class="set-row" style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+            <div style="width:20px; font-size:10px; color:var(--text-muted); font-weight:700;">#${s}</div>
+            <div class="input-group" style="flex:1;">
+              <input type="number" inputmode="decimal" placeholder="Carga" id="carga-${i}-${s}" value="${saved ? saved.carga_absoluta : ""}" />
+            </div>
+            <div class="input-group" style="flex:1;">
+              <input type="number" inputmode="numeric" placeholder="Reps" id="reps-${i}-${s}" value="${saved ? saved.reps_executadas : ""}" />
+            </div>
+            <div class="input-group" style="flex:1;">
+              <input type="number" inputmode="numeric" placeholder="RIR" id="rir-${i}-${s}" value="${saved ? saved.rir : ""}" />
+            </div>
+          </div>
+        `;
+        }
+
+        const obs = ex.observacoes
+          ? `<div class="ex-obs">${ex.observacoes}</div>`
+          : "";
+
+        html += `<div class="exercise-card ${allSaved ? "completed" : ""}" id="ex-${i}">
+        <div class="ex-header" style="cursor:pointer;" onclick="App.toggleCollapse('ex-body-${i}', 'col-icon-${i}')">
+          <div><span class="ex-order">#${ex.ordem_exercicio}</span>
+          <div class="ex-name">${ex.nome_exercicio}</div>
+          ${obs}
+          </div>
+          <span class="collapse-icon" id="col-icon-${i}" style="transform: rotate(180deg);">▼</span>
+        </div>
+        <div class="ex-meta" style="margin-bottom:16px;">
+          <div class="meta-item"><div class="meta-label">Séries</div><div class="meta-value">${ex[sk] || "-"}</div></div>
+          <div class="meta-item"><div class="meta-label">Reps</div><div class="meta-value">${ex[rk] || "-"}</div></div>
+          <div class="meta-item"><div class="meta-label">Descanso</div><div class="meta-value">${ex[dk] || "-"}</div></div>
+        </div>
+        <div id="ex-body-${i}" class="ex-body-wrapper collapsed">
+          <div class="ex-body-inner">
+            <div class="sets-container" style="margin-bottom:8px;">
+              ${setsHtml}
+            </div>
+            <div style="display:flex; gap:12px; margin-bottom:16px; justify-content:flex-end;">
+              <button class="btn-ghost" style="padding:8px; width:48px;" onclick="App.removeSet('${ex.id_exercicio}')">🗑️</button>
+              <button class="btn-ghost" style="padding:8px; width:48px; border-color:var(--neon); color:var(--neon);" onclick="App.addSet('${ex.id_exercicio}')">➕</button>
+            </div>
+            <button class="btn-neon" onclick="App.saveExecution(${i},'${ex.id_exercicio}')">⚡ Registrar Série(s)</button>
+          </div>
+        </div>
+      </div>`;
+      });
+
+      html += `<button class="btn-ghost" style="margin-top:8px" onclick="App.openRPEModal()">🎯 Finalizar Sessão — Registrar RPE</button>`;
+      c.innerHTML = html;
+    },
+
+    saveExecution(idx, idEx) {
+      const numSets = this.exerciseSets[idEx];
+      let savedCount = 0;
+
+      for (let s = 1; s <= numSets; s++) {
+        const carga =
+          parseFloat(document.getElementById(`carga-${idx}-${s}`).value) || 0;
+        const reps =
+          parseInt(document.getElementById(`reps-${idx}-${s}`).value) || 0;
+        const rir =
+          parseInt(document.getElementById(`rir-${idx}-${s}`).value) || 0;
+
+        if (carga > 0 || reps > 0) {
+          const dateParts = this.selectedDate.split("-");
+          const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+
+          const rec = {
+            id_sessao: this.genSessionId(
+              {
+                id_ficha: this.selectedFicha,
+                id_treino: this.selectedTreino,
+                id_exercicio: idEx,
+              },
+              s,
+            ),
+            data_treino: formattedDate,
+            id_exercicio: idEx,
+            semana_referencia: this.currentWeek,
+            carga_absoluta: carga,
+            reps_executadas: reps,
+            rir: rir,
+            rpe_sessao: 0,
+            sync_status: "pending",
+          };
+          this.saveToLocal(rec);
+          savedCount++;
+        }
+      }
+
+      if (savedCount > 0) {
+        this.showToast(
+          `${savedCount} série(s) salva(s) localmente ⚡`,
+          "success",
+        );
+        this.renderTreino();
+        if (navigator.onLine) setTimeout(() => this.syncToServer(), 1500);
+      } else {
+        this.showToast("Preencha carga ou reps", "error");
+      }
+    },
+
+    openRPEModal() {
+      document.getElementById("rpe-modal").classList.add("show");
+      document.getElementById("rpe-big-value").textContent = "5";
+      document.getElementById("rpe-slider-input").value = 5;
+    },
+
+    updateRPEDisplay(val) {
+      document.getElementById("rpe-big-value").textContent = val;
+    },
+
+    confirmSessionRPE() {
+      const rpe = parseFloat(document.getElementById("rpe-slider-input").value);
+      let pending = this.readCache("xs_pending", []);
+      const dateParts = this.selectedDate.split("-");
+      const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+
+      pending.forEach((r) => {
+        if (r.data_treino === formattedDate && r.rpe_sessao === 0) {
+          r.rpe_sessao = rpe;
+          r.sync_status = "pending";
+        }
+      });
+
+      this.writeCache("xs_pending", pending);
+      this.pendingSync = pending;
+      document.getElementById("rpe-modal").classList.remove("show");
+      this.showToast(`RPE ${rpe} registrado para a sessão`, "success");
+      if (navigator.onLine) setTimeout(() => this.syncToServer(), 1000);
+    },
+
+    genSessionId(ex, setNum) {
+      const ficha = ex.id_ficha || "SEM_FICHA";
+      const treino = ex.id_treino || "SEM_TREINO";
+      return `${ficha}_${treino}_${ex.id_exercicio}_W${this.currentWeek}_${this.selectedDate}_S${setNum}`;
+    },
+
+    toggleCollapse(bodyId, iconId) {
+      const body = document.getElementById(bodyId);
+      const icon = document.getElementById(iconId);
+      if (body.classList.contains("collapsed")) {
+        body.classList.remove("collapsed");
+        icon.style.transform = "rotate(0deg)";
+      } else {
+        body.classList.add("collapsed");
+        icon.style.transform = "rotate(180deg)";
+      }
+    },
+
+    addSet(idEx) {
+      this.exerciseSets[idEx] = (this.exerciseSets[idEx] || 1) + 1;
+      this.renderTreino();
+    },
+
+    removeSet(idEx) {
+      if (this.exerciseSets[idEx] > 1) {
+        this.exerciseSets[idEx]--;
+        this.renderTreino();
+      }
+    },
+
+    populateFilters() {
+      const fichas = new Set();
+      this.prescricaoCache.forEach((r) => {
+        if (r.id_ficha) fichas.add(r.id_ficha);
+      });
+
+      const fichasArr = Array.from(fichas);
+      if (!this.selectedFicha && fichasArr.length > 0)
+        this.selectedFicha = fichasArr[0];
+
+      const fSel = document.getElementById("ficha-filter");
+      if (fSel) {
+        fSel.innerHTML = fichasArr
+          .map((f) => `<option value="${f}">${f}</option>`)
+          .join("");
+        if (this.selectedFicha) fSel.value = this.selectedFicha;
+      }
+
+      const fSelP = document.getElementById("ficha-filter-prescricao");
+      if (fSelP) {
+        fSelP.innerHTML = fichasArr
+          .map((f) => `<option value="${f}">${f}</option>`)
+          .join("");
+        if (this.selectedFicha) fSelP.value = this.selectedFicha;
+      }
+
+      this.updateTreinoFilterOptions();
+    },
+
+    updateTreinoFilterOptions() {
+      const treinos = new Set();
+      this.prescricaoCache.forEach((r) => {
+        if (String(r.id_ficha) === String(this.selectedFicha) && r.id_treino) {
+          treinos.add(r.id_treino);
+        }
+      });
+
+      const treinosArr = Array.from(treinos);
+      if (!treinosArr.includes(this.selectedTreino) && treinosArr.length > 0) {
+        this.selectedTreino = treinosArr[0];
+      }
+
+      const tSel = document.getElementById("treino-filter");
+      if (tSel) {
+        tSel.innerHTML = treinosArr
+          .map((t) => `<option value="${t}">${t}</option>`)
+          .join("");
+        if (this.selectedTreino) tSel.value = this.selectedTreino;
+      }
+    },
+
+    filterFicha() {
+      const val1 = document.getElementById("ficha-filter")?.value;
+      const val2 = document.getElementById("ficha-filter-prescricao")?.value;
+      this.selectedFicha = this.currentScreen === "treino" ? val1 : val2;
+
+      if (this.currentScreen === "treino")
+        document.getElementById("ficha-filter-prescricao").value =
+          this.selectedFicha;
+      else document.getElementById("ficha-filter").value = this.selectedFicha;
+
+      this.updateTreinoFilterOptions();
+      if (this.currentScreen === "treino") this.renderTreino();
+      else if (this.currentScreen === "prescricao") this.renderPrescricao();
+    },
+
+    filterTreino() {
+      this.selectedTreino = document.getElementById("treino-filter").value;
+      this.renderTreino();
+    },
+
+    updateTreinoDate() {
+      this.selectedDate = document.getElementById("treino-date").value;
+      this.renderTreino();
+    },
+
+    // ── LOCAL STORAGE ──
+    saveToLocal(rec) {
+      let p = this.readCache("xs_pending", []);
+      const idx = p.findIndex((r) => r.id_sessao === rec.id_sessao);
+      if (idx >= 0) p[idx] = rec;
+      else p.push(rec);
+      this.writeCache("xs_pending", p);
+      this.pendingSync = p;
+      this.updateSyncBadge();
+    },
+
+    getSaved(sid) {
+      const p = this.readCache("xs_pending", []);
+      return p.find((r) => r.id_sessao === sid);
+    },
+
+    loadPending() {
+      this.pendingSync = this.readCache("xs_pending", []);
+    },
+
+    updateSyncBadge() {
+      const dot = document.getElementById("sync-dot");
+      const count = document.getElementById("sync-count");
+      const pend = this.pendingSync.filter((r) => r.sync_status === "pending");
+      if (pend.length > 0) {
+        dot.classList.add("pending");
+        count.textContent =
+          pend.length + " pendente" + (pend.length > 1 ? "s" : "");
+      } else {
+        dot.classList.remove("pending");
+        count.textContent = "Sincronizado";
+      }
+    },
+
+    // ── SYNC ──
+    bindSync() {
+      document.getElementById("sync-badge").addEventListener("click", () => {
+        if (!navigator.onLine) {
+          this.showToast("Sem conexão", "error");
+          return;
+        }
+        this.syncToServer();
+      });
+    },
+
+    syncToServer() {
+      const pend = this.pendingSync.filter((r) => r.sync_status === "pending");
+      if (pend.length === 0) return;
+      this.showToast("Sincronizando...", "warning");
+      this.callServer("syncExecucao", "clientSyncExecucao", { records: pend })
+        .then((res) => {
+          if (res.success) {
+            let all = this.readCache("xs_pending", []);
+            all.forEach((r) => {
+              if (r.sync_status === "pending") r.sync_status = "clean";
+            });
+            this.writeCache("xs_pending", all);
+            this.pendingSync = all;
+            this.updateSyncBadge();
+            this.showToast(`${res.synced} sincronizado(s) ✓`, "success");
+          } else this.showToast("Erro: " + res.error, "error");
+        })
+        .catch(() => this.showToast("Falha na sync", "error"));
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // TELA 2: PRESCRIÇÃO
+    // ═══════════════════════════════════════════════════════════
+    loadPrescricao() {
+      this.renderPrescricao();
+    },
+
+    renderPrescricao() {
+      const c = document.getElementById("prescricao-list");
+      let exs = this.prescricaoCache;
+      if (this.selectedFicha)
+        exs = exs.filter(
+          (e) => String(e.id_ficha) === String(this.selectedFicha),
+        );
+
+      if (!exs || exs.length === 0) {
+        c.innerHTML =
+          '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sem prescrição</div></div>';
+        return;
+      }
+
+      const wk = this.currentWeek;
+      const sk = "semana_" + wk + "_sets";
+      const rk = "semana_" + wk + "_reps";
+      const dk = "semana_" + wk + "_descanso";
+      const groups = {};
+
+      exs.forEach((ex) => {
+        const t = ex.id_treino || "Treino (Geral)";
+        if (!groups[t]) groups[t] = [];
+        groups[t].push(ex);
+      });
+
+      let html = "";
+      Object.keys(groups).forEach((treino, idx) => {
+        html += `<div class="rx-treino-header" onclick="App.toggleCollapse('rx-body-${idx}', 'rx-icon-${idx}')">
+        <span>${treino}</span>
+        <span id="rx-icon-${idx}" style="font-size:12px; transition:transform 0.3s; transform:rotate(180deg); color:var(--text-muted)">▼</span>
+      </div>`;
+        html += `<div id="rx-body-${idx}" class="rx-body-wrapper collapsed">
+        <div class="rx-body-inner">
+          <div class="rx-header"><span>#</span><span style="text-align:left">Exercício</span><span>Sets</span><span>Reps</span><span>Rest</span></div>`;
+        groups[treino].forEach((ex) => {
+          const obs = ex.observacoes
+            ? `<div class="rx-obs">${ex.observacoes}</div>`
+            : "";
+          html += `<div class="rx-row">
+          <span class="rx-order">${ex.ordem_exercicio}</span>
+          <span class="rx-name">${ex.nome_exercicio}</span>
+          <span class="rx-val sets">${ex[sk] || "-"}</span><span class="rx-val">${ex[rk] || "-"}</span><span class="rx-val">${ex[dk] || "-"}</span>
+          ${obs}
+        </div>`;
+        });
+        html += `</div></div>`;
+      });
+      c.innerHTML = html;
+    },
+
+    changeWeek(week) {
+      this.currentWeek = week;
+      document
+        .querySelectorAll(".week-btn")
+        .forEach((b) => b.classList.remove("active"));
+      document
+        .querySelector(`.week-btn[data-week="${week}"]`)
+        .classList.add("active");
+      if (this.currentScreen === "prescricao") this.renderPrescricao();
+      else if (this.currentScreen === "treino") this.renderTreino();
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // TELA 3: HISTÓRICO
+    // ═══════════════════════════════════════════════════════════
+    loadHistorico() {
+      this.renderHistorico();
+    },
+
+    openHistoryModal(dateKey, treinoGroupStr) {
+      const rows = JSON.parse(decodeURIComponent(treinoGroupStr));
+      const title = document.getElementById("history-modal-title");
+      const content = document.getElementById("history-modal-content");
+
+      title.textContent = `Treino: ${dateKey}`;
+
+      let totalVol = 0;
+      let avgRPE = 0;
+      let setsDone = rows.length;
+      let exsMap = new Set();
+
+      rows.forEach((r) => {
+        totalVol += r.carga_absoluta * r.reps_executadas;
+        avgRPE += parseFloat(r.rpe_sessao) || 0;
+        exsMap.add(r.id_exercicio);
+      });
+      if (setsDone > 0) avgRPE = (avgRPE / setsDone).toFixed(1);
+
+      let html = `
+      <div class="kpi-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
+        <div class="kpi-card" style="padding:12px;">
+          <div class="kpi-value" style="font-size:20px;">${this.fmtNum(totalVol)}</div>
+          <div class="kpi-label" style="font-size:9px;">Vol. Load</div>
+        </div>
+        <div class="kpi-card" style="padding:12px;">
+          <div class="kpi-value" style="font-size:20px;">${avgRPE}</div>
+          <div class="kpi-label" style="font-size:9px;">RPE Médio</div>
+        </div>
+        <div class="kpi-card" style="padding:12px;">
+          <div class="kpi-value" style="font-size:20px;">${exsMap.size}</div>
+          <div class="kpi-label" style="font-size:9px;">Exercícios</div>
+        </div>
+        <div class="kpi-card" style="padding:12px;">
+          <div class="kpi-value" style="font-size:20px;">${setsDone}</div>
+          <div class="kpi-label" style="font-size:9px;">Séries</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <h4 style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:8px;">Exercícios Realizados</h4>
+    `;
+
+      const exList = {};
+      rows.forEach((r) => {
+        if (!exList[r.id_exercicio]) exList[r.id_exercicio] = [];
+        exList[r.id_exercicio].push(r);
+      });
+
+      Object.keys(exList).forEach((exName) => {
+        html += `<div style="font-size:13px; margin-bottom:4px; font-weight:600; color:var(--text-primary);">${exName}</div>`;
+        exList[exName].forEach((s, idx) => {
+          html += `<div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); padding-left:8px; margin-bottom:2px;">
+          <span>Série ${idx + 1}</span>
+          <span style="color:var(--text-primary);">${s.carga_absoluta}kg × ${s.reps_executadas} (RIR: ${s.rir})</span>
+        </div>`;
+        });
+        html += `<div style="height:8px;"></div>`;
+      });
+
+      html += `</div>`;
+      content.innerHTML = html;
+      document.getElementById("history-modal").classList.add("show");
+    },
+
+    renderHistorico() {
+      const c = document.getElementById("historico-list");
+      const rows = this.historicoCache || [];
+      if (rows.length === 0) {
+        c.innerHTML =
+          '<div class="empty-state"><div class="empty-icon">🕒</div><div class="empty-text">Nenhuma execução registrada</div></div>';
+        return;
+      }
+
+      const groups = {};
+      rows.forEach((r) => {
+        if (!groups[r.data_treino]) groups[r.data_treino] = [];
+        groups[r.data_treino].push(r);
+      });
+
+      let html = "";
+      const sortedDates = Object.keys(groups).sort((a, b) => {
+        const pa = a.split("/");
+        const pb = b.split("/");
+        return (
+          new Date(pb[2], pb[1] - 1, pb[0]) - new Date(pa[2], pa[1] - 1, pa[0])
+        );
+      });
+
+      sortedDates.forEach((date) => {
+        html += `<div class="section-title" style="margin-top:16px">${date}</div>`;
+        const sessionRows = groups[date];
+        const exsSet = new Set(sessionRows.map((r) => r.id_exercicio));
+        let totalVol = sessionRows.reduce(
+          (acc, r) => acc + r.carga_absoluta * r.reps_executadas,
+          0,
+        );
+        const encodedData = encodeURIComponent(JSON.stringify(sessionRows));
+
+        html += `<div class="exercise-card" style="padding:16px; margin-bottom:8px; cursor:pointer;" onclick="App.openHistoryModal('${date}', '${encodedData}')">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:700; font-size:15px; color:var(--text-primary); margin-bottom:4px;">Treino Finalizado</div>
+            <div style="font-size:11px; color:var(--text-muted);">${exsSet.size} exercícios • ${sessionRows.length} séries</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="color:var(--neon); font-weight:800; font-size:16px;">${this.fmtNum(totalVol)}</div>
+            <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">Vol. Total</div>
+          </div>
+        </div>
+      </div>`;
+      });
+      c.innerHTML = html;
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // TELA 4: DASHBOARD DE CARGA
+    // ═══════════════════════════════════════════════════════════
+    loadCarga() {
+      this.renderCarga();
+    },
+
+    renderCarga() {
+      const rows = this.historicoCache || [];
+      const kpi = document.getElementById("carga-kpis");
+      const charts = document.getElementById("carga-charts");
+      if (rows.length === 0) {
+        kpi.innerHTML = "";
+        charts.innerHTML =
+          '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Sem dados de execução ainda</div></div>';
+        return;
+      }
+
+      const groups = {};
+      const allExercises = new Set();
+      rows.forEach((r) => {
+        allExercises.add(r.id_exercicio);
+        if (!groups[r.data_treino])
+          groups[r.data_treino] = {
+            data: r.data_treino,
+            rows: [],
+            volumeTotal: 0,
+          };
+        groups[r.data_treino].rows.push(r);
+        groups[r.data_treino].volumeTotal +=
+          r.carga_absoluta * r.reps_executadas;
+      });
+
+      if (!this.selectedChartExercises) {
+        this.selectedChartExercises = Array.from(allExercises).slice(0, 3);
+      }
+
+      const sessoes = Object.values(groups).sort((a, b) => {
+        const pa = a.data.split("/");
+        const pb = b.data.split("/");
+        return (
+          new Date(pa[2], pa[1] - 1, pa[0]) - new Date(pb[2], pb[1] - 1, pb[0])
+        );
+      });
+
+      sessoes.forEach((s) => {
+        let sumRPE = 0;
+        s.rows.forEach((r) => (sumRPE += parseFloat(r.rpe_sessao) || 0));
+        s.rpeMedia = sumRPE / s.rows.length;
+        s.cargaGeral = s.rpeMedia * s.rows.length;
+      });
+
+      const lastSession = sessoes[sessoes.length - 1];
+      const totalVol = sessoes.reduce((s, x) => s + x.volumeTotal, 0);
+      const avgRPE =
+        sessoes.reduce((s, x) => s + x.rpeMedia, 0) / sessoes.length;
+
+      kpi.innerHTML = `
+      <div class="kpi-card"><div class="kpi-value">${this.fmtNum(lastSession.volumeTotal)}</div>
+        <div class="kpi-label">Volume Load</div><div class="kpi-sub">Última sessão</div></div>
+      <div class="kpi-card"><div class="kpi-value">${avgRPE.toFixed(1)}</div>
+        <div class="kpi-label">RPE Médio</div><div class="kpi-sub">Carga interna</div></div>
+      <div class="kpi-card"><div class="kpi-value">${this.fmtNum(totalVol)}</div>
+        <div class="kpi-label">Vol. Acumulado</div><div class="kpi-sub">${sessoes.length} sessões</div></div>
+      <div class="kpi-card"><div class="kpi-value">${sessoes.length}</div>
+        <div class="kpi-label">Sessões Totais</div><div class="kpi-sub">Concluídas</div></div>`;
+
+      charts.innerHTML = `
+      <div id="chart-volume" class="chart-container"><div class="chart-title" style="color:var(--neon)">Volume Load por Sessão</div><div id="svg-volume"></div></div>
+      <div id="chart-carga-geral" class="chart-container"><div class="chart-title" style="color:var(--neon)">Carga de Treino Geral (RPE × Séries)</div><div id="svg-carga-geral"></div></div>
+      <div id="chart-prog" class="chart-container">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div class="chart-title" style="margin:0;color:var(--neon)">Progressão (Carga Máxima)</div>
+          <button onclick="App.openChartSettings()" style="background:transparent;border:none;font-size:16px;cursor:pointer;">⚙️</button>
+        </div>
+        <div id="svg-prog"></div>
+      </div>
+    `;
+
+      this.drawBarChart(
+        "svg-volume",
+        sessoes,
+        "volumeTotal",
+        "Volume",
+        "#39FF14",
+      );
+      this.drawBarChart(
+        "svg-carga-geral",
+        sessoes,
+        "cargaGeral",
+        "Carga Geral",
+        "#00BFFF",
+      );
+      this.drawProgressionChart(rows);
+    },
+
+    openChartSettings() {
+      const rows = this.historicoCache || [];
+      const allExs = new Set();
+      rows.forEach((r) => allExs.add(r.id_exercicio));
+
+      let html = "";
+      Array.from(allExs)
+        .sort()
+        .forEach((ex) => {
+          const checked = (this.selectedChartExercises || []).includes(ex)
+            ? "checked"
+            : "";
+          html += `<label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-primary);">
+        <input type="checkbox" value="${ex}" class="chart-ex-checkbox" ${checked} style="width:16px;height:16px;accent-color:var(--neon);">
+        ${ex}
+      </label>`;
+        });
+      document.getElementById("chart-settings-list").innerHTML = html;
+      document.getElementById("chart-settings-modal").classList.add("show");
+    },
+
+    applyChartSettings() {
+      const checkboxes = document.querySelectorAll(
+        ".chart-ex-checkbox:checked",
+      );
+      if (checkboxes.length > 3) {
+        this.showToast("Selecione no máximo 3 exercícios.", "warning");
+        return;
+      }
+      if (checkboxes.length === 0) {
+        this.showToast("Selecione pelo menos 1 exercício.", "warning");
+        return;
+      }
+      this.selectedChartExercises = Array.from(checkboxes).map((c) => c.value);
+      document.getElementById("chart-settings-modal").classList.remove("show");
+      this.renderCarga();
+    },
+
+    drawBarChart(containerId, sessoes, key, label, color) {
+      const container = document.getElementById(containerId);
+      if (!container || sessoes.length === 0) return;
+      const W = 340;
+      const H = 160;
+      const padL = 40;
+      const padR = 10;
+      const padT = 15;
+      const padB = 30;
+      const cW = W - padL - padR;
+      const cH = H - padT - padB;
+      const maxVal = Math.max(...sessoes.map((s) => s[key]), 1);
+      const n = sessoes.length;
+      const gap = cW / n;
+      const barW = Math.max(8, Math.min(28, gap - 4));
+
+      let svg = '<svg viewBox="0 0 ' + W + " " + H + '" xmlns="http://www.w3.org/2000/svg">';
+      for (let i = 0; i <= 4; i++) {
+        const y = padT + (cH * i) / 4;
+        const val = Math.round(maxVal * (1 - i / 4));
+        svg +=
+          '<line class="grid-line" x1="' +
+          padL +
+          '" y1="' +
+          y +
+          '" x2="' +
+          (W - padR) +
+          '" y2="' +
+          y +
+          '"/>';
+        svg +=
+          '<text x="' +
+          (padL - 4) +
+          '" y="' +
+          (y + 3) +
+          '" text-anchor="end" style="font-size:8px">' +
+          this.fmtNum(val) +
+          "</text>";
+      }
+      sessoes.forEach((s, i) => {
+        const x = padL + gap * i + (gap - barW) / 2;
+        const h = (s[key] / maxVal) * cH;
+        const y = padT + cH - h;
+        svg +=
+          '<rect x="' +
+          x +
+          '" y="' +
+          y +
+          '" width="' +
+          barW +
+          '" height="' +
+          h +
+          '" fill="' +
+          color +
+          '" rx="3" style="opacity:0.8"><title>' +
+          s.data +
+          ": " +
+          Math.round(s[key]) +
+          "</title></rect>";
+        svg +=
+          '<text x="' +
+          (x + barW / 2) +
+          '" y="' +
+          (H - 6) +
+          '" text-anchor="middle" style="font-size:8px">' +
+          s.data.substring(0, 5) +
+          "</text>";
+      });
+      svg += "</svg>";
+      container.innerHTML = svg;
+    },
+
+    drawProgressionChart(rows) {
+      const container = document.getElementById("svg-prog");
+      if (
+        !container ||
+        !this.selectedChartExercises ||
+        this.selectedChartExercises.length === 0
+      )
+        return;
+
+      const dataMap = {};
+      const allDates = new Set();
+
+      rows.forEach((r) => {
+        if (this.selectedChartExercises.includes(r.id_exercicio)) {
+          if (!dataMap[r.id_exercicio]) dataMap[r.id_exercicio] = {};
+          if (
+            !dataMap[r.id_exercicio][r.data_treino] ||
+            r.carga_absoluta > dataMap[r.id_exercicio][r.data_treino]
+          ) {
+            dataMap[r.id_exercicio][r.data_treino] = parseFloat(
+              r.carga_absoluta,
+            );
+          }
+          allDates.add(r.data_treino);
+        }
+      });
+
+      const dates = Array.from(allDates).sort((a, b) => {
+        const pa = a.split("/");
+        const pb = b.split("/");
+        return (
+          new Date(pa[2], pa[1] - 1, pa[0]) - new Date(pb[2], pb[1] - 1, pb[0])
+        );
+      });
+
+      const colors = ["#39FF14", "#00BFFF", "#FF6B9D"];
+      const W = 340;
+      const H = 180;
+      const padL = 40;
+      const padR = 10;
+      const padT = 15;
+      const padB = 30;
+      const cW = W - padL - padR;
+      const cH = H - padT - padB;
+
+      let maxVal = 1;
+      this.selectedChartExercises.forEach((ex) => {
+        Object.values(dataMap[ex] || {}).forEach((v) => {
+          if (v > maxVal) maxVal = v;
+        });
+      });
+
+      let svg = '<svg viewBox="0 0 ' + W + " " + H + '" xmlns="http://www.w3.org/2000/svg">';
+      for (let i = 0; i <= 4; i++) {
+        const y = padT + (cH * i) / 4;
+        const val = Math.round(maxVal * (1 - i / 4));
+        svg +=
+          '<line class="grid-line" x1="' +
+          padL +
+          '" y1="' +
+          y +
+          '" x2="' +
+          (W - padR) +
+          '" y2="' +
+          y +
+          '"/>';
+        svg +=
+          '<text x="' +
+          (padL - 4) +
+          '" y="' +
+          (y + 3) +
+          '" text-anchor="end" style="font-size:8px">' +
+          val +
+          "kg</text>";
+      }
+
+      const gap = dates.length > 1 ? cW / (dates.length - 1) : cW;
+      dates.forEach((d, i) => {
+        const x = padL + (dates.length > 1 ? gap * i : cW / 2);
+        svg +=
+          '<text x="' +
+          x +
+          '" y="' +
+          (H - 6) +
+          '" text-anchor="middle" style="font-size:8px">' +
+          d.substring(0, 5) +
+          "</text>";
+      });
+
+      this.selectedChartExercises.forEach((exName, ei) => {
+        const color = colors[ei % colors.length];
+        const pts = [];
+        dates.forEach((d, i) => {
+          if (dataMap[exName] && dataMap[exName][d]) {
+            const x = padL + (dates.length > 1 ? gap * i : cW / 2);
+            const y = padT + cH - (dataMap[exName][d] / maxVal) * cH;
+            pts.push({ x, y, val: dataMap[exName][d] });
+          }
+        });
+
+        if (pts.length > 1) {
+          svg +=
+            '<polyline points="' +
+            pts.map((p) => p.x + "," + p.y).join(" ") +
+            '" stroke="' +
+            color +
+            '" stroke-width="2" fill="none"/>';
+        }
+        pts.forEach((p) => {
+          svg +=
+            '<circle cx="' +
+            p.x +
+            '" cy="' +
+            p.y +
+            '" r="3" fill="' +
+            color +
+            '"><title>' +
+            exName +
+            ": " +
+            p.val +
+            "kg</title></circle>";
+          svg +=
+            '<text x="' +
+            p.x +
+            '" y="' +
+            (p.y - 6) +
+            '" text-anchor="middle" style="font-size:8px;fill:var(--text-primary);">' +
+            p.val +
+            "</text>";
+        });
+        svg +=
+          '<text x="' +
+          (padL + ei * 90) +
+          '" y="' +
+          (padT - 4) +
+          '" style="fill:' +
+          color +
+          ';font-size:9px">● ' +
+          exName.substring(0, 10) +
+          "</text>";
+      });
+
+      svg += "</svg>";
+      container.innerHTML = svg;
+    },
+
+    fmtNum(n) {
+      return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n));
+    },
+
+    showToast(msg, type) {
+      let t = document.getElementById("toast");
+      if (!t) {
+        t = document.createElement("div");
+        t.id = "toast";
+        t.className = "toast";
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.className = "toast " + type;
+      requestAnimationFrame(() => t.classList.add("show"));
+      clearTimeout(this._tt);
+      this._tt = setTimeout(() => t.classList.remove("show"), 2500);
+    },
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => App.init());
+  } else {
+    App.init();
+  }
+</script>

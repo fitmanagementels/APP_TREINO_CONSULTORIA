@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta
+      name="description"
+      content="XSTeam Wellness V2.0 — Plataforma single-tenant de alta performance."
+    />
+    <title>XSTeam Wellness V2.0</title>
+    <?!= include('style'); ?>
+  </head>
+
+  <body>
+    <!-- ═══ GLOBAL LOADER ═══ -->
+    <div id="global-loader" class="global-loader">
+      <div class="loader-content">
+        <div class="spinner"></div>
+        <div class="loader-text" id="loader-text">Preparando ambiente...</div>
+        <div
+          id="loader-status"
+          style="font-size: 10px; color: var(--text-muted); margin-top: 8px"
+        >
+          Buscando sua periodização
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ HEADER ═══ -->
+    <header class="app-header">
+      <h1>XSTEAM</h1>
+      <div class="subtitle">Wellness V2.0 — Single Tenant</div>
+    </header>
+
+    <!-- ═══ SYNC BADGE ═══ -->
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      "
+    >
+      <div class="sync-badge" id="sync-badge" style="margin-bottom: 0">
+        <span class="dot" id="sync-dot"></span>
+        <span id="sync-count">Sincronizado</span>
+      </div>
+      <button
+        onclick="App.manualRefresh()"
+        style="
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 20px;
+          padding: 4px;
+        "
+      >
+        🔄
+      </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TELA 1: EXECUÇÃO (Treino Offline-First)                -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="screen active" id="screen-treino">
+      <div class="week-selector">
+        <button
+          class="week-btn active"
+          data-week="1"
+          onclick="App.changeWeek(1)"
+        >
+          Semana 1
+        </button>
+        <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
+          Semana 2
+        </button>
+        <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
+          Semana 3
+        </button>
+        <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
+          Semana 4
+        </button>
+      </div>
+      <!-- Filtros de Treino na Mesma Linha -->
+      <div
+        class="filters-row"
+        style="
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 8px;
+          margin-bottom: 20px;
+        "
+      >
+        <div class="input-group">
+          <label style="color: var(--neon); font-size: 10px">Ficha</label>
+          <select id="ficha-filter" onchange="App.filterFicha()"></select>
+        </div>
+        <div class="input-group">
+          <label style="color: var(--neon); font-size: 10px">Treino</label>
+          <select id="treino-filter" onchange="App.filterTreino()"></select>
+        </div>
+        <div class="input-group">
+          <label style="color: var(--neon); font-size: 10px">Data</label>
+          <input
+            type="date"
+            id="treino-date"
+            onchange="App.updateTreinoDate()"
+            style="padding: 12px 4px; font-size: 14px"
+          />
+        </div>
+      </div>
+      <div class="section-title">Sessão de Treino</div>
+      <div id="treino-list">
+        <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
+        <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TELA 2: PRESCRIÇÃO (Periodização Dinâmica)             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-prescricao">
+      <div class="ficha-filter-container" style="margin-bottom: 20px">
+        <div class="input-group">
+          <label style="color: var(--neon); font-size: 12px; font-weight: 700"
+            >Ficha de Treino</label
+          >
+          <select
+            id="ficha-filter-prescricao"
+            style="
+              font-size: 16px;
+              padding: 12px;
+              border-color: var(--neon);
+              background: var(--bg-card);
+              color: var(--text-primary);
+            "
+          ></select>
+        </div>
+      </div>
+      <div class="week-selector">
+        <button
+          class="week-btn active"
+          data-week="1"
+          onclick="App.changeWeek(1)"
+        >
+          Semana 1
+        </button>
+        <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
+          Semana 2
+        </button>
+        <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
+          Semana 3
+        </button>
+        <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
+          Semana 4
+        </button>
+      </div>
+      <div class="section-title">Exercícios Prescritos</div>
+      <div id="prescricao-list">
+        <div class="skeleton" style="height: 48px; margin-bottom: 8px"></div>
+        <div class="skeleton" style="height: 48px; margin-bottom: 8px"></div>
+        <div class="skeleton" style="height: 48px; margin-bottom: 8px"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TELA 3: HISTÓRICO (Todas as Execuções)                -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-historico">
+      <h2
+        style="
+          color: var(--neon);
+          font-size: 18px;
+          margin: 24px 0 16px;
+          padding-left: 4px;
+          text-transform: uppercase;
+        "
+      >
+        Histórico de Treino
+      </h2>
+      <div id="historico-list">
+        <div class="skeleton" style="height: 80px; margin-bottom: 8px"></div>
+        <div class="skeleton" style="height: 80px; margin-bottom: 8px"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TELA 4: DASHBOARD DE CARGA DE TREINO                  -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-carga">
+      <div class="section-title">Performance — Carga de Treino</div>
+      <div class="kpi-grid" id="carga-kpis">
+        <div class="kpi-card skeleton" style="height: 90px"></div>
+        <div class="kpi-card skeleton" style="height: 90px"></div>
+        <div class="kpi-card skeleton" style="height: 90px"></div>
+        <div class="kpi-card skeleton" style="height: 90px"></div>
+      </div>
+      <div id="carga-charts">
+        <div class="skeleton" style="height: 220px; margin-bottom: 16px"></div>
+        <div class="skeleton" style="height: 220px; margin-bottom: 16px"></div>
+      </div>
+    </div>
+
+    <!-- ═══ RPE SESSION MODAL ═══ -->
+    <div class="rpe-modal-overlay" id="rpe-modal">
+      <div class="rpe-modal">
+        <h2>RPE da Sessão</h2>
+        <p>Como você classificaria o esforço geral desta sessão de treino?</p>
+        <div class="rpe-big" id="rpe-big-value">5</div>
+        <input
+          type="range"
+          class="rpe-slider"
+          min="1"
+          max="10"
+          step="0.5"
+          value="5"
+          id="rpe-slider-input"
+          oninput="App.updateRPEDisplay(this.value)"
+        />
+        <div class="rpe-scale">1 = Muito Fácil &nbsp;│&nbsp; 10 = Máximo</div>
+        <button
+          class="btn-neon"
+          style="margin-top: 16px"
+          onclick="App.confirmSessionRPE()"
+        >
+          ✓ Confirmar RPE
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ HISTORY MODAL ═══ -->
+    <div class="rpe-modal-overlay" id="history-modal">
+      <div
+        class="rpe-modal"
+        style="
+          text-align: left;
+          max-width: 400px;
+          width: 95%;
+          max-height: 80vh;
+          overflow-y: auto;
+        "
+      >
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+          "
+        >
+          <h2
+            style="margin: 0; font-size: 18px; color: var(--neon)"
+            id="history-modal-title"
+          >
+            Detalhes do Treino
+          </h2>
+          <button
+            id="history-modal-close"
+            style="
+              background: transparent;
+              border: none;
+              color: var(--text-muted);
+              font-size: 24px;
+              cursor: pointer;
+            "
+          >
+            &times;
+          </button>
+        </div>
+        <div id="history-modal-content"></div>
+      </div>
+    </div>
+
+    <!-- ═══ CHART EXERCISE SELECTOR MODAL ═══ -->
+    <div class="rpe-modal-overlay" id="chart-settings-modal">
+      <div
+        class="rpe-modal"
+        style="
+          text-align: left;
+          max-width: 400px;
+          width: 95%;
+          max-height: 80vh;
+          overflow-y: auto;
+        "
+      >
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+          "
+        >
+          <h2 style="margin: 0; font-size: 16px; color: var(--neon)">
+            Gráfico de Progressão
+          </h2>
+          <button
+            id="chart-settings-close"
+            style="
+              background: transparent;
+              border: none;
+              color: var(--text-muted);
+              font-size: 24px;
+              cursor: pointer;
+            "
+          >
+            &times;
+          </button>
+        </div>
+        <p
+          style="
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+          "
+        >
+          Selecione até 3 exercícios para comparar as cargas máximas ao longo do
+          tempo:
+        </p>
+        <div
+          id="chart-settings-list"
+          style="
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          "
+        ></div>
+        <button class="btn-neon" onclick="App.applyChartSettings()">
+          Aplicar Gráfico
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ BOTTOM NAVIGATION ═══ -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-screen="treino">
+        <span class="nav-icon">⚡</span>
+        <span class="nav-label">Treino</span>
+      </button>
+      <button class="nav-item" data-screen="prescricao">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Prescrição</span>
+      </button>
+      <button class="nav-item" data-screen="historico">
+        <span class="nav-icon">🕒</span>
+        <span class="nav-label">Histórico</span>
+      </button>
+      <button class="nav-item" data-screen="carga">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Carga</span>
+      </button>
+    </nav>
+
+    <script>
+      (function () {
+        var loaderStart = Date.now();
+        window.__xsAppBootStarted = false;
+        window.__xsLastBootError = "";
+
+        function setLoaderStatus(message) {
+          var status = document.getElementById("loader-status");
+          if (status) status.textContent = message;
+        }
+
+        function releaseLoader(reason) {
+          var loader = document.getElementById("global-loader");
+          if (!loader || loader.classList.contains("hidden")) return;
+          loader.classList.add("hidden");
+          window.__xsLoaderFallbackReason = reason;
+          var treinoList = document.getElementById("treino-list");
+          if (treinoList && treinoList.querySelector(".skeleton")) {
+            var detail = window.__xsLastBootError
+              ? '<div class="empty-subtext" style="margin-top:8px;font-size:11px;opacity:0.8;">' +
+                  window.__xsLastBootError +
+                "</div>"
+              : "";
+            treinoList.innerHTML =
+              '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Modo seguro ativo. Use atualizar para tentar carregar novamente.</div>' +
+              detail +
+              "</div>";
+          }
+          console.warn("[XSTeam boot fallback]", reason);
+        }
+
+        window.__xsSetLoaderStatus = setLoaderStatus;
+        window.__xsReleaseLoader = releaseLoader;
+
+        window.addEventListener("error", function (event) {
+          setLoaderStatus("Erro no carregamento. Abrindo modo seguro...");
+          window.__xsLastBootError =
+            (event.message || "Erro de script") +
+            (event.lineno ? " | linha " + event.lineno : "");
+          console.error("[XSTeam boot error]", event.message, event.filename, event.lineno);
+          setTimeout(function () {
+            releaseLoader("window.error after " + (Date.now() - loaderStart) + "ms");
+          }, 500);
+        });
+
+        window.addEventListener("unhandledrejection", function (event) {
+          setLoaderStatus("Falha assíncrona. Abrindo modo seguro...");
+          window.__xsLastBootError = String(event.reason || "Promessa rejeitada");
+          console.error("[XSTeam boot rejection]", event.reason);
+          setTimeout(function () {
+            releaseLoader("unhandledrejection after " + (Date.now() - loaderStart) + "ms");
+          }, 500);
+        });
+
+        setTimeout(function () {
+          if (!window.__xsAppBootStarted) {
+            setLoaderStatus("Tempo excedido. Abrindo modo seguro...");
+            releaseLoader("boot timeout after " + (Date.now() - loaderStart) + "ms");
+          }
+        }, 8000);
+      })();
+    </script>
+
+    <?!= include('script'); ?>
+  </body>
+</html>
