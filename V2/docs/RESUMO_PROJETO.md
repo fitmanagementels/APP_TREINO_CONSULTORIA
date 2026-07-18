@@ -18,7 +18,7 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 - **Objetivo principal:** permitir prescrever fichas, executar séries e consultar histórico/carga em um Web App conectado a uma planilha Google.
 - **Resultado esperado:** uma experiência móvel resiliente, com abertura rápida, registros locais recuperáveis e sincronização segura com a base.
 - **Uso previsto:** operação de fichas e treinos no contexto XSTeam. O público detalhado e as regras de acesso além do modo atual do Web App são **a confirmar**.
-- **Critérios técnicos de sucesso:** boot sem dependência de IA ou cache de carga, escrita sem apagar dados existentes, compatibilidade com `HtmlService` e testes locais aprovados.
+- **Critérios técnicos de sucesso:** boot sem dependência de IA ou cache de carga, escrita sem apagar dados existentes, compatibilidade com `HtmlService`, testes locais aprovados e um fluxo de uso rápido mesmo sob os limites de execução e chamadas do Google Apps Script.
 
 ## Estado atual
 
@@ -67,6 +67,15 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 - `setupDatabase()` é não destrutivo: cria apenas abas gerenciadas ausentes, acrescenta cabeçalhos faltantes e preserva dados/abas manuais.
 - O identificador de sessão inclui ficha e treino para reduzir colisões entre sessões distintas.
 
+### Critério fundamental: limites do Apps Script e UX
+
+- A V2 terá um PWA Gerenciador e instâncias single-tenant independentes por aluno. Planilhas distintas evitam concorrência de dados entre alunos, mas os Web Apps executados como o treinador compartilham limites de execução, chamadas e concorrência da conta que os publicou.
+- O fluxo do usuário tem prioridade máxima: uma ação de treino não pode depender de chamadas longas, repetitivas ou de disponibilidade imediata do servidor. A interface deve responder primeiro e informar claramente qualquer sincronização pendente ou falha recuperável.
+- O boot deve reunir os dados essenciais em uma única resposta; cada cliente deve manter no máximo uma requisição ativa, agrupar interações rápidas e evitar consultas redundantes.
+- Registros de treino ficam em fila local e são sincronizados em lotes pequenos, idempotentes e gravados em lote na planilha. Falhas temporárias devem usar retentativa progressiva, sem duplicar registros nem interromper o treino.
+- Escritas concorrentes na mesma instância devem ser protegidas no backend. A publicação de um treino pelo Gerenciador deve ser atômica ou repetível com segurança, para que o aluno nunca receba uma versão parcial.
+- O Gerenciador deve registrar falhas, tempo de execução e problemas de sincronização. Se as quotas ou a concorrência se tornarem recorrentes, a evolução prevista é migrar a API e os dados operacionais para uma base como Supabase ou Firebase, preservando a experiência dos PWAs.
+
 ## Histórico relevante
 
 | Referência | Mudança | Impacto |
@@ -86,6 +95,7 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 | Setup não destrutivo. | A planilha pode conter dados operacionais e abas manuais. | `setupDatabase()`. | Executar uma vez em cópia segura e conferir abas/cabeçalhos. |
 | IA apenas sob demanda e sem custo automático. | O fluxo diário deve permanecer previsível, rápido e sem consumo automático. | Abas de memória e futuros relatórios. | Não implementar chamadas automáticas no boot ou na sincronização. |
 | Catálogo muscular manual. | A prescrição precisa respeitar exercícios e demandas controlados na planilha. | `Demanda_Muscular`, tela Prescrever. | Criar/editar treino e validar exercício contra o catálogo. |
+| Limites do Apps Script com UX prioritária. | Instâncias de alunos isolam dados, mas execuções publicadas pela mesma conta podem disputar quotas e concorrência. | Boot, sincronização, publicação e monitoramento da V2. | Usar requisições curtas, uma chamada ativa por cliente, fila offline, lotes, retentativas e operações idempotentes. |
 
 ## Informações importantes vindas do chat
 
@@ -98,7 +108,7 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 - **Pronto no repositório:** backend, telas, editor de prescrição, schemas de memória, testes de regressão e documentação reorganizada.
 - **Em validação externa:** publicação do projeto Apps Script e integração com a planilha real.
 - **Ainda não implementado:** interface de relatórios com IA, geração de snapshots de memória, chamada real a um modelo e política de reaproveitamento de insights.
-- **Cuidado ao continuar:** não reintroduzir escrita em `DB_GestaoCarga` no boot, não usar APIs modernas incompatíveis no `script.html` e não transformar `setupDatabase()` em operação destrutiva.
+- **Cuidado ao continuar:** não reintroduzir escrita em `DB_GestaoCarga` no boot, não usar APIs modernas incompatíveis no `script.html`, não transformar `setupDatabase()` em operação destrutiva e não criar fluxos que dependam de muitas chamadas simultâneas ou de escrita por interação.
 
 ## Próximos passos
 

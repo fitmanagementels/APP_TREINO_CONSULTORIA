@@ -342,7 +342,7 @@
         <summary>Objetivo e critérios de sucesso</summary>
         <div class="section-body">
           <p><strong>Objetivo:</strong> manter uma operação de fichas e treinos rápida, móvel e resiliente sobre Google Apps Script e uma planilha Google.</p>
-          <p><strong>Critérios técnicos:</strong> abertura sem depender de IA/carga, sincronização recuperável, setup não destrutivo, compatibilidade com <code>HtmlService</code> e testes locais aprovados.</p>
+          <p><strong>Critérios técnicos:</strong> abertura sem depender de IA/carga, sincronização recuperável, setup não destrutivo, compatibilidade com <code>HtmlService</code>, testes locais aprovados e um fluxo rápido mesmo sob limites de chamadas e execução do Apps Script.</p>
           <p><strong>Público detalhado:</strong> a confirmar; o uso observado é o contexto operacional XSTeam.</p>
         </div>
       </details>
@@ -385,8 +385,23 @@
               <tr><td>Setup não destrutivo.</td><td>A planilha pode ter dados e abas manuais.</td><td>Não usar limpeza/recriação de abas no <code>setupDatabase()</code>.</td></tr>
               <tr><td>IA sob demanda e sem custo automático.</td><td>O fluxo diário deve permanecer rápido e previsível.</td><td>Não chamar modelos no boot ou na sincronização.</td></tr>
               <tr><td>Catálogo muscular manual.</td><td>A prescrição precisa respeitar exercícios controlados.</td><td>Validar novos exercícios contra <code>Demanda_Muscular</code>.</td></tr>
+              <tr><td>UX prioritária sob limites do Apps Script.</td><td>Instâncias isolam dados, mas execuções publicadas pela mesma conta podem disputar quotas e concorrência.</td><td>Usar chamadas curtas, uma requisição ativa por cliente, fila offline, lotes, retentativas e operações idempotentes.</td></tr>
             </tbody>
           </table>
+        </div>
+      </details>
+
+      <details class="doc-section">
+        <summary>Limites do Apps Script e proteção da experiência</summary>
+        <div class="section-body">
+          <p>A V2 terá um PWA Gerenciador e instâncias single-tenant por aluno. Planilhas distintas evitam concorrência de dados entre alunos, mas Web Apps publicados pela mesma conta compartilham limites de execução, chamadas e concorrência.</p>
+          <ul>
+            <li>O boot reúne os dados essenciais em uma resposta e cada cliente mantém apenas uma requisição ativa.</li>
+            <li>Séries são preservadas em fila local e sincronizadas em lotes pequenos, idempotentes e gravados em lote.</li>
+            <li>Falhas temporárias usam retentativa progressiva, sem duplicar registros nem interromper o treino.</li>
+            <li>O backend protege escritas simultâneas na mesma instância; a publicação deve impedir versões parciais.</li>
+            <li>O Gerenciador registra falhas e duração das execuções. Se quotas se tornarem recorrentes, a evolução prevista é migrar a API e os dados operacionais para Supabase ou Firebase.</li>
+          </ul>
         </div>
       </details>
 
@@ -452,6 +467,7 @@
             <li><strong>Integração externa:</strong> deploy e permissões da planilha não são verificáveis apenas no repositório.</li>
             <li><strong>Compatibilidade:</strong> APIs modernas em <code>app/script.html</code> podem quebrar o Web App publicado.</li>
             <li><strong>Dados:</strong> mudanças destrutivas em setup ou abas manuais podem afetar a operação.</li>
+            <li><strong>Escala:</strong> chamadas excessivas, longas ou simultâneas podem alcançar as quotas compartilhadas da conta que publica os Web Apps.</li>
             <li><strong>Produto:</strong> objetivo/audiência detalhados para relatórios de IA ainda precisam de definição.</li>
             <li><strong>Acesso:</strong> regras de autenticação além do manifesto atual são a confirmar.</li>
           </ul>
