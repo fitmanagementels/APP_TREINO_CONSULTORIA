@@ -1,232 +1,149 @@
-# Resumo do Projeto
+# Contexto e Status do Projeto
 
-## Visao geral
+Última atualização: 18 de julho de 2026 (America/Fortaleza)
 
-Este projeto e um Web App em Google Apps Script para ficha de treino, com foco mobile e fluxo offline-first.
+Este é o documento de continuidade do projeto. Ele consolida o estado verificado no repositório, as decisões que não devem ser desfeitas e as validações que ainda dependem do ambiente Google Apps Script.
 
-- Backend: `app/Código.gs`
-- Frontend: `app/index.html`, `app/script.html`, `app/style.html`
-- Manifesto do Apps Script: `app/appscript.json`
-- Base de dados principal: planilha Google com abas `DB_Prescricao`, `DB_Execucao` e `DB_GestaoCarga`
+## Resumo executivo
+
+- O projeto é um Web App mobile-first de prescrição, execução e acompanhamento de treinos, construído com Google Apps Script e uma planilha Google.
+- O uso diário é offline-first: séries e RPE ficam pendentes no navegador e são sincronizados com `DB_Execucao` quando há conexão.
+- O carregamento inicial usa um único pacote essencial de prescrição e histórico; carga, memória e IA não bloqueiam a tela de treino.
+- Há cinco telas ativas: **Treino**, **Prescrição**, **Prescrever**, **Histórico** e **Carga**.
+- O editor **Prescrever** usa o catálogo manual `Demanda_Muscular`, calcula demanda muscular por ciclo e substitui somente a combinação de ficha e treino salva.
+- O repositório contém testes locais de regressão e de apresentação. A publicação e o teste contra a planilha real no Apps Script continuam pendentes de validação externa.
+
+## Objetivo do projeto
+
+- **Objetivo principal:** permitir prescrever fichas, executar séries e consultar histórico/carga em um Web App conectado a uma planilha Google.
+- **Resultado esperado:** uma experiência móvel resiliente, com abertura rápida, registros locais recuperáveis e sincronização segura com a base.
+- **Uso previsto:** operação de fichas e treinos no contexto XSTeam. O público detalhado e as regras de acesso além do modo atual do Web App são **a confirmar**.
+- **Critérios técnicos de sucesso:** boot sem dependência de IA ou cache de carga, escrita sem apagar dados existentes, compatibilidade com `HtmlService` e testes locais aprovados.
+
+## Estado atual
+
+- **Etapa:** base funcional documentada e pronta para validação integrada no Google Apps Script.
+- **Código principal:** `app/Código.gs` centraliza o backend; `app/index.html`, `app/script.html` e `app/style.html` compõem o frontend.
+- **Versão relevante:** o commit `1566aa7` consolidou o editor de prescrição e o acabamento do frontend antes desta atualização documental.
+- **Dados essenciais de boot:** `getInitialAppData()` retorna `prescricao`, `historico`, `status`, `errors` e `error`; o HTML recebe o payload em `window.__XS_BOOTSTRAP__`.
+- **Pendência imediata:** publicar o código no Apps Script e executar um teste completo com a planilha real. Essa publicação não pode ser confirmada apenas pelo repositório Git.
 
 ## Como o app funciona
 
-Ao abrir o Web App, `doGet()` renderiza `index.html`, que inclui CSS e JavaScript via `include()`.
-
-No carregamento da pagina:
-
-1. `App.init()` define a data atual, carrega pendencias do `localStorage`, atualiza o badge de sincronizacao e inicia a navegacao.
-2. `index.html` injeta `window.__XS_BOOTSTRAP__` com o retorno de `getInitialAppDataJson()`.
-3. `fetchInitialData()` consome um pacote unico de boot com:
-   - `prescricao.rows`
-   - `historico.rows`
-   - `status`
-4. Quando os dados essenciais terminam, o loader global e escondido e a tela inicial de treino e renderizada.
-5. A gestao de carga e carregada em segundo plano, sem bloquear a abertura do app.
-
-## Estrutura das telas
-
-### 1. Treino
-
-Tela principal de execucao.
-
-- Filtra por `ficha`, `treino` e `data`
-- Renderiza exercicios da prescricao da semana ativa
-- Permite adicionar/remover series por exercicio
-- Salva carga, repeticoes e RIR no `localStorage`
-- Gera `id_sessao` por exercicio/semana/data/serie
-- Tenta sincronizar com a planilha quando ha internet
-
-### 2. Prescricao
-
-Mostra a ficha organizada por treino e semana.
-
-- Agrupa por `id_treino`
-- Exibe sets, reps, descanso e observacoes
-- Compartilha o filtro de ficha com a tela de treino
-
-### 3. Historico
-
-Mostra as execucoes agrupadas por data.
-
-- Cada card resume volume total, numero de exercicios e numero de series
-- Ao abrir o modal, exibe detalhes por exercicio e serie
-
-### 4. Carga
-
-Dashboard visual calculado a partir do historico.
-
-- KPIs de volume, RPE medio, volume acumulado e total de sessoes
-- Grafico de volume por sessao
-- Grafico de carga geral
-- Grafico de progressao por exercicio com selecao de ate 3 exercicios
-
-## Modelo de dados identificado
-
-### DB_Prescricao
-
-Cabecalho atual da planilha-base:
-
-- `id_ficha`
-- `id_treino`
-- `id_exercicio`
-- `observacoes`
-- `ordem_exercicio`
-- `semana_1_sets`
-- `semana_1_reps`
-- `semana_1_descanso`
-- `semana_2_sets`
-- `semana_2_reps`
-- `semana_2_descanso`
-- `semana_3_sets`
-- `semana_3_reps`
-- `semana_3_descanso`
-- `semana_4_sets`
-- `semana_4_reps`
-- `semana_4_descanso`
-
-Regras de uso no app:
-
-- a aba lida pelo app precisa se chamar exatamente `DB_Prescricao`;
-- a linha 1 precisa conter os cabecalhos acima;
-- cada linha valida precisa ter `id_exercicio` preenchido;
-- `id_ficha` alimenta o filtro Ficha;
-- `id_treino` alimenta o filtro Treino;
-- na tela Treino, o app filtra por Ficha + Treino + Semana ativa;
-- na Semana 1, a linha aparece como exercicio prescrito quando `semana_1_sets` e/ou `semana_1_reps` estao preenchidos;
-- espacos extras em `id_ficha`, `id_treino`, `id_exercicio` e `observacoes` sao normalizados pelo backend.
-
-### DB_Execucao
-
-Esperada pelo backend:
-
-- `id_sessao`
-- `data_treino`
-- `id_exercicio`
-- `semana_referencia`
-- `carga_absoluta`
-- `reps_executadas`
-- `rir`
-- `rpe_sessao`
-- `sync_status`
-
-### DB_GestaoCarga
-
-Gerada/atualizada no backend com resumo por sessao:
-
-- `data_sessao`
-- `exercicio_principal`
-- `volume_load`
-- `e1RM`
-- `rpe_sessao_agregado`
-
-## Fluxo de sincronizacao
-
-O app guarda execucoes localmente em `xs_pending`.
-
-- Ao registrar uma serie, cria um objeto com `sync_status: "pending"`
-- O badge mostra quantos registros ainda nao foram sincronizados
-- `syncToServer()` envia apenas itens pendentes
-- O backend faz upsert na aba `DB_Execucao`
-- Depois do sucesso, os itens locais passam para `sync_status: "clean"`
-
-## Observacoes importantes encontradas
-
-- O projeto mistura dois modelos de schema da prescricao: um antigo sem `id_ficha` e o atual com `id_ficha`
-- A tela de carga hoje usa `historicoCache` no frontend, mesmo havendo uma rota/back-end especifica de gestao de carga
-- O backend recalcula e tenta escrever `DB_GestaoCarga` durante a leitura de dados da carga
-
-## Correcao aplicada para o "carregamento infinito"
-
-O loader deixou de depender da chamada de gestao de carga. Agora ele depende apenas de prescricao e historico, que sao os dados essenciais para abrir a tela de treino.
-
-Tambem foram aplicados ajustes defensivos:
-
-- timeout de 12 segundos com fallback para cache local
-- fallback independente no `index.html` que libera o loader apos 8 segundos mesmo se o script principal quebrar
-- mensagens de status no loader para diagnosticar em que etapa o boot travou
-- leitura segura do `localStorage`
-- carregamento de gestao de carga em segundo plano
-- `clientGetGestaoCarga()` sem escrita automatica em `DB_GestaoCarga`
-- `setupDatabase()` alinhado ao schema atual com `id_ficha`
-- `id_sessao` incluindo ficha e treino para reduzir colisao entre treinos
-- RPE alterado apos sincronizacao volta para `pending` e pode ser reenviado
-
-## Proximos passos
-
-- publicar nova versao do Web App no Apps Script
-- testar abertura inicial com a planilha real
-- testar registro de serie, RPE e sincronizacao
-- criar documentacao de deploy do Apps Script
-
-## Correcao aplicada para leitura da planilha real
-
-A planilha-base atual e:
-
-- `1x4tHTYIr4GKuBqyW_SnoUsQaC9U1PeIgsKdXrXaztG8`
-
-O backend passou a usar `getSpreadsheet()` como ponto unico de acesso a base:
-
-- primeiro tenta `ScriptProperties.SPREADSHEET_ID`;
-- depois tenta o ID da planilha-base acima;
-- se algum ID explicito falhar por acesso/autorizacao, registra o erro e tenta o proximo caminho;
-- por fim usa `SpreadsheetApp.getActiveSpreadsheet()` como fallback para scripts vinculados.
-
-Tambem foi adicionado `getAppStatus()`/`clientGetAppStatus()` para diagnosticar abas, linhas de dados e cabecalhos ausentes. A leitura de `DB_Prescricao` agora normaliza espacos extras em `id_ficha`, `id_treino`, `id_exercicio` e observacoes, evitando que valores como `Treino 1 ` quebrem os filtros do frontend.
-
-No frontend, quando a prescricao vier vazia ou falhar, o app deixa de mascarar o problema como tela vazia simples e passa a mostrar uma mensagem de diagnostico na tela de treino, incluindo o detalhe do erro quando o Apps Script retornar uma causa, mantendo o cache local como fallback.
-
-Tambem foi tratado o caso em que `google.script.run` retorna `null` para chamadas de leitura. Nessa situacao, o frontend agora considera a resposta invalida e cai para cache local com uma mensagem clara, sem tentar parsear como JSON uma resposta HTML do Web App publicado. As leituras de prescricao e historico tambem passaram a validar `data` antes de acessar `data.rows`, evitando que uma resposta vazia quebre a renderizacao.
-
-No frontend publicado, `google.script.run` deve ser tratado como proxy do Apps Script. O app nao verifica mais `typeof google.script.run[metodo]`, porque essa checagem pode falhar e desviar indevidamente para `fetch`. Quando `google.script.run` existe, ele e o caminho principal para `clientGetPrescricao`, `clientGetHistorico` e demais funcoes do backend.
-
-Para reduzir fragilidade na abertura, o contrato principal agora e `getInitialAppData()`/`clientGetInitialData()`. Ele retorna um objeto simples:
-
-- `prescricao: { rows: [...] }`
-- `historico: { rows: [...] }`
-- `status: { prescricaoRows, historicoRows, prescricaoSheet, execucaoSheet }`
-- `errors`/`error` quando alguma leitura parcial falhar
-
-Esse pacote e tambem injetado no HTML como `window.__XS_BOOTSTRAP__`, antes do `script.html`. Assim o filtro Ficha/Treino pode ser populado a partir dos dados renderizados pelo proprio backend, sem depender de multiplas chamadas iniciais.
-
-## Compatibilidade do frontend com Apps Script
-
-Como o Web App publicado pelo HtmlService pode falhar durante a injecao do HTML com `document.write`, o `app/script.html` foi convertido para uma sintaxe mais conservadora.
-
-Evitar no frontend publicado:
-
-- virgulas finais antes de `]`, `}` ou `)`;
-- `const` e `let`;
-- arrow functions;
-- template literals;
-- spread syntax e optional chaining;
-- `Set`, `Array.from`, `Object.values`, `Object.assign`;
-- `requestAnimationFrame`;
-- `new URL`;
-- `NodeList.forEach` e `dataset`.
-
-Foram adicionados helpers simples no frontend para substituir esses recursos quando necessario. A suite local agora protege essa compatibilidade em `tests/app-regression.test.js`.
-
-## Arquitetura de IA hibrida
-
-Foi definida uma arquitetura hibrida para relatorios interpretativos: regras deterministicas no Apps Script, memoria estruturada na planilha e IA apenas sob demanda.
-
-A regra maxima e custo zero. A IA nao roda no carregamento, nao participa do registro de treino e nao faz chamadas automaticas. Quando houver botao de relatorio, o app deve montar um contexto compacto a partir das abas de memoria e so entao chamar o modelo.
-
-O boot do app nao usa `DB_GestaoCarga`, `DB_MemoriaBase`, `DB_MemoriaExercicio` nem `DB_Insights`. Essas abas nao podem bloquear a leitura de `DB_Prescricao` nem a populacao dos filtros da tela Treino.
-
-Novas abas previstas/gerenciadas:
-
-- `DB_MemoriaBase`: snapshots consolidados por periodo e tipo de relatorio
-- `DB_MemoriaExercicio`: variaveis por exercicio dentro de cada snapshot
-- `DB_Insights`: historico de respostas de IA e contexto usado
-
-`DB_GestaoCarga` continua sendo usada pelo app como cache/resumo por sessao, principalmente para telas, graficos e estatisticas rapidas.
-
-## Setup seguro da planilha
-
-`setupDatabase()` foi redesenhado para ser nao destrutivo.
-
-Agora ele cria abas gerenciadas se faltarem, acrescenta cabecalhos ausentes e formata a linha 1, mas nao apaga dados existentes e nao mexe em abas criadas manualmente fora da lista gerenciada.
-
-Documentacao detalhada: `docs/ARQUITETURA_IA_HIBRIDA.md`
+1. `doGet()` renderiza `index.html`; o template injeta o payload inicial e inclui estilo e script.
+2. `App.init()` recupera pendências locais, atualiza o indicador de sincronização e inicia a navegação.
+3. `fetchInitialData()` consome o boot com prescrição e histórico; o loader é liberado quando esses dados essenciais terminam.
+4. Se o servidor falhar ou retornar resposta inválida, o app usa cache local quando disponível e mostra diagnóstico em vez de uma tela vazia silenciosa.
+5. `clientGetGestaoCarga()` roda em segundo plano e não escreve `DB_GestaoCarga` durante o boot.
+
+## Telas e fluxos ativos
+
+| Tela | Responsabilidade | Estado observado |
+|---|---|---|
+| **Treino** | Executar a sessão por ficha, treino, data e ciclo. | Permite ajustes locais por dia, séries extras/omitidas e sincronização de pendências. |
+| **Prescrição** | Consultar a ficha por treino e semana. | Exibe séries, repetições, descanso e observações. |
+| **Prescrever** | Criar ou editar uma combinação de ficha e treino. | Usa `Demanda_Muscular`, permite ordenar/trocar exercícios e salva ciclos nas colunas `semana_*`. |
+| **Histórico** | Consultar execuções já registradas. | Agrupa sessões e abre detalhes por exercício e série. |
+| **Carga** | Mostrar indicadores e gráficos de desempenho. | A apresentação atual usa o histórico no frontend; o backend também produz resumos de sessão sob demanda. |
+
+## Dados e integração com a planilha
+
+### Abas gerenciadas
+
+| Aba | Finalidade | Situação no código |
+|---|---|---|
+| `DB_Prescricao` | Exercícios por ficha, treino e ciclos semanais. | Leitura normaliza texto; o editor substitui somente o treino selecionado. |
+| `DB_Execucao` | Registros granulares de séries executadas. | Recebe upsert por `id_sessao`. |
+| `DB_GestaoCarga` | Cache/resumo por sessão, ficha e treino. | Pode ser atualizado por demanda; não é atualizado no boot. |
+| `DB_MemoriaBase` | Snapshots consolidados para análises futuras. | Schema e setup disponíveis; fluxo de geração ainda não foi implementado. |
+| `DB_MemoriaExercicio` | Métricas por exercício dentro de um snapshot. | Schema e setup disponíveis. |
+| `DB_Insights` | Contextos e respostas de IA sob demanda. | Schema e setup disponíveis; não há chamada real de IA. |
+
+### Regras importantes
+
+- `DB_Prescricao` usa `id_ficha`, `id_treino`, `id_exercicio`, `observacoes`, `ordem_exercicio` e campos de séries, repetições e descanso para as semanas 1 a 4.
+- `DB_GestaoCarga` usa um schema de resumo rico: identificadores de sessão/grupo, ficha, treino, totais, RPE médio, melhor e1RM, maior carga, origem e atualização. Não usar o schema histórico reduzido de cinco campos.
+- `Demanda_Muscular` é uma aba manual de catálogo; `setupDatabase()` não deve criá-la, limpá-la ou alterá-la.
+- `setupDatabase()` é não destrutivo: cria apenas abas gerenciadas ausentes, acrescenta cabeçalhos faltantes e preserva dados/abas manuais.
+- O identificador de sessão inclui ficha e treino para reduzir colisões entre sessões distintas.
+
+## Histórico relevante
+
+| Referência | Mudança | Impacto |
+|---|---|---|
+| `45301dc` | Upload inicial do projeto. | Estabeleceu a base do Web App e da documentação. |
+| `c825200` | Direção de acabamento visual documentada. | Definiu a evolução visual do frontend sem alterar regras de negócio. |
+| `3b43bfe` | Iluminação de fundo por aba documentada. | Diferenciou visualmente os contextos de uso. |
+| `1566aa7` | Editor Prescrever, ajustes de backend, testes e polish do frontend. | Adicionou o fluxo de prescrição e consolidou compatibilidade/regressões. |
+
+## Decisões tomadas e justificativas
+
+| Decisão | Por que foi tomada | Onde impacta | Como verificar/retomar |
+|---|---|---|---|
+| Boot com dados essenciais apenas. | A carga e a IA não podem atrasar a abertura do treino. | `getInitialAppData()`, `fetchInitialData()`. | Confirmar que prescrição/histórico bastam para remover o loader. |
+| Sintaxe conservadora no frontend. | `HtmlService` pode falhar com recursos modernos durante a injeção de HTML. | `app/script.html`. | Rodar `node tests/app-regression.test.js`. |
+| Sincronização offline-first. | O registro da sessão não deve se perder por indisponibilidade temporária. | `localStorage`, `xs_pending`, `DB_Execucao`. | Registrar série, interromper rede e sincronizar depois. |
+| Setup não destrutivo. | A planilha pode conter dados operacionais e abas manuais. | `setupDatabase()`. | Executar uma vez em cópia segura e conferir abas/cabeçalhos. |
+| IA apenas sob demanda e sem custo automático. | O fluxo diário deve permanecer previsível, rápido e sem consumo automático. | Abas de memória e futuros relatórios. | Não implementar chamadas automáticas no boot ou na sincronização. |
+| Catálogo muscular manual. | A prescrição precisa respeitar exercícios e demandas controlados na planilha. | `Demanda_Muscular`, tela Prescrever. | Criar/editar treino e validar exercício contra o catálogo. |
+
+## Informações importantes vindas do chat
+
+- O usuário solicitou que este arquivo e `docs/index.html` funcionem como documentação de **status e continuidade**.
+- A cópia publicada no GitHub deve acompanhar a reorganização documental.
+- A documentação não substitui o deploy no Google Apps Script: GitHub e Apps Script são etapas separadas.
+
+## Etapa atual em desenvolvimento
+
+- **Pronto no repositório:** backend, telas, editor de prescrição, schemas de memória, testes de regressão e documentação reorganizada.
+- **Em validação externa:** publicação do projeto Apps Script e integração com a planilha real.
+- **Ainda não implementado:** interface de relatórios com IA, geração de snapshots de memória, chamada real a um modelo e política de reaproveitamento de insights.
+- **Cuidado ao continuar:** não reintroduzir escrita em `DB_GestaoCarga` no boot, não usar APIs modernas incompatíveis no `script.html` e não transformar `setupDatabase()` em operação destrutiva.
+
+## Próximos passos
+
+1. Publicar os arquivos atuais no projeto Google Apps Script e criar/atualizar a implantação do Web App.
+2. Abrir a URL publicada e validar o boot com a planilha real, inclusive o diagnóstico para prescrição vazia ou resposta inválida.
+3. Registrar séries, alterar RPE após uma sincronização e confirmar o upsert em `DB_Execucao`.
+4. Executar `setupDatabase()` em ambiente controlado e conferir que apenas abas gerenciadas/cabeçalhos foram tratados.
+5. Decidir o escopo do próximo incremento: relatórios determinísticos de carga ou a camada de IA sob demanda.
+
+## Arquivos e pastas importantes
+
+| Caminho | Função | Observação |
+|---|---|---|
+| `app/Código.gs` | Backend Apps Script, schemas e rotas. | Ponto de entrada para planilha, setup, boot e sincronização. |
+| `app/index.html` | Estrutura do Web App e fallback de loader. | Injeta o payload inicial do backend. |
+| `app/script.html` | Lógica do frontend. | Usar sintaxe conservadora compatível com `HtmlService`. |
+| `app/style.html` | Estilos do Web App. | Inclui acabamento visual e variação de luz por aba. |
+| `docs/RESUMO_PROJETO.md` | Fonte de verdade de status e continuidade. | Atualizar primeiro quando o estado mudar. |
+| `docs/index.html` | Leitura visual do resumo. | Deve espelhar este documento, sem narrativa divergente. |
+| `docs/ARQUITETURA_IA_HIBRIDA.md` | Detalhe da arquitetura de memória/IA. | Complementa, não substitui, este resumo. |
+| `tests/app-regression.test.js` | Proteções de regressão e compatibilidade. | Executar após mudanças em app ou docs. |
+| `tests/frontend-polish.test.js` | Proteções do acabamento visual. | Executar após mudanças de estilo. |
+| `scripts/git-workspace.sh` | Wrapper Git do workspace. | Usar para status, commit, push e fetch. |
+
+## Riscos, bloqueios e pendências
+
+- **Risco externo:** a integração com a planilha e o deploy do Apps Script não podem ser validados apenas localmente.
+- **Risco de compatibilidade:** recursos modernos no `script.html` podem quebrar a renderização do Web App publicado.
+- **Risco de dados:** alterações destrutivas no setup ou em abas manuais podem afetar informações operacionais.
+- **Pendência de produto:** o objetivo e a audiência detalhada dos relatórios de IA ainda precisam de uma definição antes de implementar a tela final.
+- **Lacuna a confirmar:** regras de autenticação e acesso além da configuração atual do manifesto do Apps Script.
+
+## Como retomar o trabalho em outra sessão
+
+1. Leia este arquivo e, se o assunto for IA/memória, leia também `docs/ARQUITETURA_IA_HIBRIDA.md`.
+2. Verifique o estado do repositório: `bash scripts/git-workspace.sh status --short --branch`.
+3. Veja os commits recentes: `bash scripts/git-workspace.sh log --oneline --decorate -8`.
+4. Execute `node tests/app-regression.test.js` e `node tests/frontend-polish.test.js` antes de modificar o app.
+5. Para continuar o fluxo funcional, comece pela publicação no Apps Script e pelos testes com a planilha real; para evoluir produto, defina primeiro o escopo dos relatórios.
+
+## Contexto para outro chat ou IA
+
+- **Objetivo essencial:** manter um Web App de treinos rápido, offline-first e seguro para prescrição, execução e acompanhamento com Google Apps Script/Planilhas.
+- **Estado atual:** o repositório contém o app, o editor Prescrever e os schemas de carga/memória; ainda falta validar deploy e planilha reais.
+- **Arquivos a ler primeiro:** `docs/RESUMO_PROJETO.md`, `app/Código.gs`, `app/script.html`, `tests/app-regression.test.js`.
+- **Decisões que não devem ser desfeitas:** boot essencial sem IA/carga, setup não destrutivo, sintaxe conservadora no frontend, IA apenas sob demanda e catálogo muscular manual.
+- **Próxima ação recomendada:** publicar no Apps Script e testar o ciclo completo de boot, registro local, sincronização e RPE.
+- **Antes de agir:** confirmar o estado da implantação, as permissões da planilha e se o próximo objetivo é confiabilidade operacional ou relatórios inteligentes.

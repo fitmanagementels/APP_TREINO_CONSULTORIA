@@ -492,21 +492,18 @@ const tests = [
     },
   ],
   [
-    "docs viewer should start with all collapsible sections closed",
+    "docs viewer should expose the portable project-status sections",
     () => {
-      const body = bodyOf(docsViewer, "renderReader");
-      assert.doesNotMatch(body, /index\s*===\s*0/);
+      assert.match(docsViewer, /Status atual/);
+      assert.match(docsViewer, /Próxima ação/);
+      assert.match(docsViewer, /Contexto para outro chat ou IA/);
+      assert.match(docsViewer, /<details class="doc-section"/);
     },
   ],
   [
-    "docs viewer should preserve manual open sections and auto-open search matches",
+    "docs viewer should keep detailed status sections collapsed by default",
     () => {
-      assert.match(docsViewer, /openSectionsByDoc/);
-      assert.match(docsViewer, /function\s+getOpenSectionsForDoc\s*\(/);
-      const body = bodyOf(docsViewer, "renderReader");
-      assert.match(body, /const\s+docOpenSections\s*=\s*getOpenSectionsForDoc\(doc\.id\)/);
-      assert.match(body, /state\.query\s*\?\s*" open"\s*:\s*docOpenSections\.has\(section\.id\)\s*\?\s*" open"\s*:\s*""/);
-      assert.match(body, /addEventListener\("toggle"/);
+      assert.doesNotMatch(docsViewer, /<details class="doc-section" open>/);
     },
   ],
 ];
