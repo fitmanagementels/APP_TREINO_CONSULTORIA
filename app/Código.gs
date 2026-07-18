@@ -3,6 +3,9 @@
 // DB_Prescricao: id_ficha|id_treino|id_exercicio|observacoes|ordem_exercicio
 //   semana_1_* ate semana_4_*
 // =====================================================================
+var DEFAULT_SPREADSHEET_ID = "1x4tHTYIr4GKuBqyW_SnoUsQaC9U1PeIgsKdXrXaztG8";
+var DEMANDA_MUSCULAR_SHEET = "Demanda_Muscular";
+
 var PRESCRICAO_HEADERS = [
   "id_ficha",
   "id_treino",
@@ -20,8 +23,7 @@ var PRESCRICAO_HEADERS = [
   "semana_3_descanso",
   "semana_4_sets",
   "semana_4_reps",
-  "semana_4_descanso",
-];
+  "semana_4_descanso"];
 
 var EXECUCAO_HEADERS = [
   "id_sessao",
@@ -32,8 +34,7 @@ var EXECUCAO_HEADERS = [
   "reps_executadas",
   "rir",
   "rpe_sessao",
-  "sync_status",
-];
+  "sync_status"];
 
 var GESTAO_CARGA_HEADERS = [
   "id_resumo_sessao",
@@ -50,8 +51,7 @@ var GESTAO_CARGA_HEADERS = [
   "maior_carga_sessao",
   "duracao_estimada_min",
   "origem_dados",
-  "updated_at",
-];
+  "updated_at"];
 
 var MEMORIA_BASE_HEADERS = [
   "id_snapshot",
@@ -77,8 +77,7 @@ var MEMORIA_BASE_HEADERS = [
   "comparacao_periodo_json",
   "resumo_contexto_json",
   "created_at",
-  "updated_at",
-];
+  "updated_at"];
 
 var MEMORIA_EXERCICIO_HEADERS = [
   "id_snapshot",
@@ -96,8 +95,7 @@ var MEMORIA_EXERCICIO_HEADERS = [
   "tendencia",
   "status_alerta",
   "resumo_exercicio_json",
-  "updated_at",
-];
+  "updated_at"];
 
 var INSIGHTS_HEADERS = [
   "id_insight",
@@ -112,8 +110,7 @@ var INSIGHTS_HEADERS = [
   "resposta_ia",
   "resposta_curta",
   "status",
-  "created_at",
-];
+  "created_at"];
 
 var MANAGED_SHEETS = {
   DB_Prescricao: PRESCRICAO_HEADERS,
@@ -121,15 +118,13 @@ var MANAGED_SHEETS = {
   DB_GestaoCarga: GESTAO_CARGA_HEADERS,
   DB_MemoriaBase: MEMORIA_BASE_HEADERS,
   DB_MemoriaExercicio: MEMORIA_EXERCICIO_HEADERS,
-  DB_Insights: INSIGHTS_HEADERS,
-};
+  DB_Insights: INSIGHTS_HEADERS};
 
 function doGet(e) {
   var p = e ? e.parameter : {};
   if (p.action) {
     return ContentService.createTextOutput(
-      JSON.stringify(routeAction(p)),
-    ).setMimeType(ContentService.MimeType.JSON);
+      JSON.stringify(routeAction(p))).setMimeType(ContentService.MimeType.JSON);
   }
   return HtmlService.createTemplateFromFile("index")
     .evaluate()
@@ -137,20 +132,17 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag(
       "viewport",
-      "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no",
-    );
+      "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no");
 }
 
 function doPost(e) {
   try {
     var p = JSON.parse(e.postData.contents);
     return ContentService.createTextOutput(
-      JSON.stringify(routeAction(p)),
-    ).setMimeType(ContentService.MimeType.JSON);
+      JSON.stringify(routeAction(p))).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(
-      JSON.stringify({ success: false, error: err.message }),
-    ).setMimeType(ContentService.MimeType.JSON);
+      JSON.stringify({ success: false, error: err.message })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -161,8 +153,16 @@ function include(f) {
 function routeAction(p) {
   try {
     switch (p.action) {
+      case "getInitialData":
+        return { success: true, data: getInitialAppData() };
+      case "getAppStatus":
+        return { success: true, data: getAppStatus() };
       case "getPrescricao":
         return { success: true, data: getPrescricaoData() };
+      case "getPrescriptionEditorData":
+        return { success: true, data: getPrescriptionEditorData() };
+      case "savePrescricaoTreino":
+        return savePrescricaoTreino(p.payload || p.data || p);
       case "getExecucao":
         return { success: true, data: getExecucaoData() };
       case "getHistorico":
@@ -171,9 +171,7 @@ function routeAction(p) {
         return {
           success: true,
           data: getGestaoCargaData({
-            updateSheet: p.updateSheet === true || p.updateSheet === "true",
-          }),
-        };
+            updateSheet: p.updateSheet === true || p.updateSheet === "true"})};
       case "syncExecucao":
         return syncExecucaoData(p.records || p.data);
       case "setupDatabase":
@@ -187,8 +185,322 @@ function routeAction(p) {
   }
 }
 
+function getInitialAppData() {
+  var result = {
+    success: true,
+    prescricao: { rows: [] },
+    historico: { rows: [] },
+    status: {
+      prescricaoRows: 0,
+      historicoRows: 0,
+      prescricaoSheet: "DB_Prescricao",
+      execucaoSheet: "DB_Execucao"},
+    errors: [],
+    error: "",
+    updatedAt: new Date().toISOString()};
+
+  try {
+    var prescricao = getPrescricaoData();
+    result.prescricao =
+      prescricao && prescricao.rows ? prescricao : { rows: [] };
+    result.status.prescricaoRows = result.prescricao.rows.length;
+  } catch (err) {
+    result.success = false;
+    result.errors.push("prescricao: " + err.message);
+  }
+
+  try {
+    var historico = getExecucaoData();
+    result.historico = historico && historico.rows ? historico : { rows: [] };
+    result.status.historicoRows = result.historico.rows.length;
+  } catch (err) {
+    result.errors.push("historico: " + err.message);
+  }
+
+  if (result.errors.length > 0) result.error = result.errors.join(" | ");
+  return result;
+}
+
+function getInitialAppDataJson() {
+  return JSON.stringify(getInitialAppData()).replace(/</g, "\\u003c");
+}
+
+function getSpreadsheet() {
+  var spreadsheetIds = [];
+  var spreadsheetErrors = [];
+  var propertyId = "";
+
+  try {
+    propertyId = cleanText(
+      PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID"));
+  } catch (err) {
+    spreadsheetErrors.push("ScriptProperties: " + err.message);
+  }
+
+  if (propertyId) spreadsheetIds.push(propertyId);
+  if (
+    DEFAULT_SPREADSHEET_ID &&
+    spreadsheetIds.indexOf(DEFAULT_SPREADSHEET_ID) === -1
+  ) {
+    spreadsheetIds.push(DEFAULT_SPREADSHEET_ID);
+  }
+
+  for (var i = 0; i < spreadsheetIds.length; i++) {
+    var spreadsheetId = spreadsheetIds[i];
+    try {
+      return SpreadsheetApp.openById(spreadsheetId);
+    } catch (err) {
+      spreadsheetErrors.push(spreadsheetId + ": " + err.message);
+    }
+  }
+
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch (err) {
+    spreadsheetErrors.push("active: " + err.message);
+  }
+
+  throw new Error(
+    "Planilha base nao acessivel. Defina SPREADSHEET_ID ou vincule o script a planilha. " +
+      spreadsheetErrors.join(" | "));
+}
+
+function getAppStatus() {
+  var ss = getSpreadsheet();
+  var status = {
+    spreadsheetId: ss.getId(),
+    spreadsheetName: ss.getName(),
+    sheets: {},
+    updatedAt: new Date().toISOString()};
+
+  Object.keys(MANAGED_SHEETS).forEach(function (sheetName) {
+    status.sheets[sheetName] = getSheetStatus(
+      ss,
+      sheetName,
+      MANAGED_SHEETS[sheetName]);
+  });
+  status.prescricao = status.sheets.DB_Prescricao;
+  status.prescricaoMissingHeaders = status.prescricao.missingHeaders;
+  status.prescricaoDataRows = status.prescricao.dataRows;
+
+  return status;
+}
+
+function getSheetStatus(ss, sheetName, expectedHeaders) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    return {
+      exists: false,
+      dataRows: 0,
+      lastRow: 0,
+      lastColumn: 0,
+      headers: [],
+      missingHeaders: expectedHeaders.slice()};
+  }
+
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  var headers =
+    lastColumn > 0
+      ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(cleanText)
+      : [];
+  var lowerHeaders = headers.map(function (h) {
+    return h.toLowerCase();
+  });
+  var missingHeaders = expectedHeaders.filter(function (header) {
+    return lowerHeaders.indexOf(String(header).toLowerCase()) === -1;
+  });
+
+  return {
+    exists: true,
+    dataRows: Math.max(lastRow - 1, 0),
+    lastRow: lastRow,
+    lastColumn: lastColumn,
+    headers: headers,
+    missingHeaders: missingHeaders};
+}
+
+function getDemandaMuscularData() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(DEMANDA_MUSCULAR_SHEET);
+  if (!sheet) return { rows: [], grupos: [], tipos: [], musculos: [] };
+  var data = sheet.getDataRange().getDisplayValues();
+  if (data.length < 2) return { rows: [], grupos: [], tipos: [], musculos: [] };
+  var headers = data[0].map(cleanText);
+  var musculos = [];
+  for (var m = 3; m < headers.length && m <= 15; m++) {
+    if (headers[m]) musculos.push(headers[m]);
+  }
+
+  var rows = [];
+  var grupos = [];
+  var tipos = [];
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i];
+    var nome = cleanText(r[0]);
+    if (!nome) continue;
+    var grupo = cleanText(r[1]);
+    var tipo = cleanText(r[2]);
+    var demandas = {};
+    for (var j = 0; j < musculos.length; j++) {
+      demandas[musculos[j]] = parseDemandValue(r[j + 3]);
+    }
+    xsUniquePushServer(grupos, grupo);
+    xsUniquePushServer(tipos, tipo);
+    rows.push({
+      nome: nome,
+      id_exercicio: nome,
+      grupo_principal: grupo,
+      tipo: tipo,
+      demandas: demandas});
+  }
+
+  return {
+    rows: rows,
+    grupos: grupos.sort(),
+    tipos: tipos.sort(),
+    musculos: musculos};
+}
+
+function getPrescriptionEditorData() {
+  var catalogo = getDemandaMuscularData();
+  var prescricao = getPrescricaoData();
+  var fichas = [];
+  var treinosPorFicha = {};
+
+  prescricao.rows.forEach(function (row) {
+    xsUniquePushServer(fichas, row.id_ficha);
+    if (!treinosPorFicha[row.id_ficha]) treinosPorFicha[row.id_ficha] = [];
+    xsUniquePushServer(treinosPorFicha[row.id_ficha], row.id_treino);
+  });
+
+  return {
+    catalogo: catalogo,
+    prescricao: prescricao,
+    fichas: fichas.sort(),
+    treinosPorFicha: treinosPorFicha,
+    updatedAt: new Date().toISOString()};
+}
+
+function savePrescricaoTreino(payload) {
+  payload = payload || {};
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var idFicha = cleanText(payload.id_ficha);
+    var idTreino = cleanText(payload.id_treino);
+    var exercicios = payload.exercicios || [];
+    if (!idFicha) return { success: false, error: "Ficha obrigatoria." };
+    if (!idTreino) return { success: false, error: "Treino obrigatorio." };
+    if (!Array.isArray(exercicios))
+      return { success: false, error: "Lista de exercicios invalida." };
+
+    var catalogo = getDemandaMuscularData();
+    var catalogMap = {};
+    catalogo.rows.forEach(function (ex) {
+      catalogMap[cleanText(ex.nome).toLowerCase()] = ex;
+    });
+    for (var e = 0; e < exercicios.length; e++) {
+      var nome = cleanText(exercicios[e].id_exercicio || exercicios[e].nome);
+      if (!catalogMap[nome.toLowerCase()]) {
+        return {
+          success: false,
+          error: "Exercicio fora do catalogo Demanda_Muscular: " + nome};
+      }
+    }
+
+    var ss = getSpreadsheet();
+    var sheet = ensureManagedSheet(ss, "DB_Prescricao", PRESCRICAO_HEADERS);
+    ensureTextFormatForReps(sheet);
+    sheet
+      .getRange(
+        2,
+        PRESCRICAO_HEADERS.indexOf("semana_1_reps") + 1,
+        Math.max(sheet.getMaxRows() - 1, 1),
+        1)
+      .setNumberFormat("@");
+    var data = sheet.getDataRange().getValues();
+    var col = getColumnMap(data);
+    for (var i = data.length - 1; i >= 1; i--) {
+      var row = data[i];
+      if (
+        cleanText(getCell(row, col, "id_ficha", 0)) === idFicha &&
+        cleanText(getCell(row, col, "id_treino", 1)) === idTreino
+      ) {
+        sheet.deleteRow(i + 1);
+      }
+    }
+
+    if (exercicios.length > 0) {
+      var values = [];
+      for (var x = 0; x < exercicios.length; x++) {
+        values.push(buildPrescricaoEditorRow(idFicha, idTreino, exercicios[x], x + 1));
+      }
+      sheet
+        .getRange(sheet.getLastRow() + 1, 1, values.length, PRESCRICAO_HEADERS.length)
+        .setValues(values);
+      ensureTextFormatForReps(sheet);
+    }
+
+    return {
+      success: true,
+      data: getPrescriptionEditorData()};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function buildPrescricaoEditorRow(idFicha, idTreino, exercicio, ordem) {
+  var valuesByHeader = {
+    id_ficha: idFicha,
+    id_treino: idTreino,
+    id_exercicio: cleanText(exercicio.id_exercicio || exercicio.nome),
+    observacoes: cleanText(exercicio.observacoes),
+    ordem_exercicio: ordem};
+  for (var week = 1; week <= 4; week++) {
+    valuesByHeader["semana_" + week + "_sets"] =
+      cleanText(getExerciseCycleValue(exercicio, week, "sets"));
+    valuesByHeader["semana_" + week + "_reps"] =
+      cleanText(getExerciseCycleValue(exercicio, week, "reps"));
+    valuesByHeader["semana_" + week + "_descanso"] =
+      cleanText(getExerciseCycleValue(exercicio, week, "descanso"));
+  }
+
+  return PRESCRICAO_HEADERS.map(function (header) {
+    return valuesByHeader[header] !== undefined ? valuesByHeader[header] : "";
+  });
+}
+
+function getExerciseCycleValue(exercicio, week, field) {
+  var key = "semana_" + week + "_" + field;
+  if (exercicio[key] !== undefined) return exercicio[key];
+  if (exercicio.ciclos && exercicio.ciclos[week - 1]) {
+    return exercicio.ciclos[week - 1][field];
+  }
+  return "";
+}
+
+function ensureTextFormatForReps(sheet) {
+  var maxRows = Math.max(sheet.getMaxRows() - 1, 1);
+  for (var i = 0; i < PRESCRICAO_HEADERS.length; i++) {
+    if (PRESCRICAO_HEADERS[i].indexOf("_reps") !== -1) {
+      sheet.getRange(2, i + 1, maxRows, 1).setNumberFormat("@");
+    }
+  }
+}
+
+function parseDemandValue(value) {
+  var clean = cleanText(value).replace(",", ".");
+  var parsed = parseFloat(clean);
+  if (isNaN(parsed)) return 0;
+  if (parsed < 0) return 0;
+  if (parsed > 1) return 1;
+  return parsed;
+}
+
 function getPrescricaoData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("DB_Prescricao");
   if (!sheet) return { rows: [] };
   var data = sheet.getDataRange().getValues();
@@ -197,14 +509,18 @@ function getPrescricaoData() {
   var rows = [];
   for (var i = 1; i < data.length; i++) {
     var r = data[i];
-    var idEx = col["id_exercicio"] !== undefined ? r[col["id_exercicio"]] : r[1];
+    var idEx = cleanText(
+      col["id_exercicio"] !== undefined ? r[col["id_exercicio"]] : r[1]);
     if (!idEx) continue;
     rows.push({
-      id_ficha: col["id_ficha"] !== undefined ? r[col["id_ficha"]] : "",
-      id_treino: col["id_treino"] !== undefined ? r[col["id_treino"]] : r[0],
-      id_exercicio: idEx,
+      id_ficha: cleanText(
+        col["id_ficha"] !== undefined ? r[col["id_ficha"]] : ""),
+      id_treino: cleanText(
+        col["id_treino"] !== undefined ? r[col["id_treino"]] : r[0]),
+      id_exercicio: cleanText(idEx),
       nome_exercicio: idEx,
-      observacoes: col["observacoes"] !== undefined ? r[col["observacoes"]] : r[2],
+      observacoes: cleanText(
+        col["observacoes"] !== undefined ? r[col["observacoes"]] : r[2]),
       ordem_exercicio:
         col["ordem_exercicio"] !== undefined ? r[col["ordem_exercicio"]] : r[3],
       semana_1_sets:
@@ -212,26 +528,33 @@ function getPrescricaoData() {
       semana_1_reps:
         col["semana_1_reps"] !== undefined ? r[col["semana_1_reps"]] : r[5],
       semana_1_descanso:
-        col["semana_1_descanso"] !== undefined ? r[col["semana_1_descanso"]] : r[6],
+        col["semana_1_descanso"] !== undefined
+          ? r[col["semana_1_descanso"]]
+          : r[6],
       semana_2_sets:
         col["semana_2_sets"] !== undefined ? r[col["semana_2_sets"]] : r[7],
       semana_2_reps:
         col["semana_2_reps"] !== undefined ? r[col["semana_2_reps"]] : r[8],
       semana_2_descanso:
-        col["semana_2_descanso"] !== undefined ? r[col["semana_2_descanso"]] : r[9],
+        col["semana_2_descanso"] !== undefined
+          ? r[col["semana_2_descanso"]]
+          : r[9],
       semana_3_sets:
         col["semana_3_sets"] !== undefined ? r[col["semana_3_sets"]] : r[10],
       semana_3_reps:
         col["semana_3_reps"] !== undefined ? r[col["semana_3_reps"]] : r[11],
       semana_3_descanso:
-        col["semana_3_descanso"] !== undefined ? r[col["semana_3_descanso"]] : r[12],
+        col["semana_3_descanso"] !== undefined
+          ? r[col["semana_3_descanso"]]
+          : r[12],
       semana_4_sets:
         col["semana_4_sets"] !== undefined ? r[col["semana_4_sets"]] : r[13],
       semana_4_reps:
         col["semana_4_reps"] !== undefined ? r[col["semana_4_reps"]] : r[14],
       semana_4_descanso:
-        col["semana_4_descanso"] !== undefined ? r[col["semana_4_descanso"]] : r[15],
-    });
+        col["semana_4_descanso"] !== undefined
+          ? r[col["semana_4_descanso"]]
+          : r[15]});
   }
   rows.sort(function (a, b) {
     return Number(a.ordem_exercicio) - Number(b.ordem_exercicio);
@@ -250,7 +573,7 @@ function getColumnMap(data) {
 }
 
 function getExecucaoData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("DB_Execucao");
   if (!sheet) return { rows: [] };
   var data = sheet.getDataRange().getValues();
@@ -272,15 +595,14 @@ function getExecucaoData() {
       rpe_sessao: parseFloat(getCell(r, col, "rpe_sessao", 7)) || 0,
       sync_status: getCell(r, col, "sync_status", 8),
       id_ficha: meta.id_ficha,
-      id_treino: meta.id_treino,
-    });
+      id_treino: meta.id_treino});
   }
   return { rows: rows };
 }
 
 function getGestaoCargaData(options) {
   options = options || {};
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheetExec = ss.getSheetByName("DB_Execucao");
   var sheetRx = ss.getSheetByName("DB_Prescricao");
   if (!sheetExec) return { sessoes: [], exercicios: [] };
@@ -298,14 +620,18 @@ function getGestaoCargaData(options) {
 
     var meta = parseSessionId(idSessao);
     var dateStr = formatDateValue(getCell(r, execCol, "data_treino", 1));
-    var idEx = String(getCell(r, execCol, "id_exercicio", 2) || meta.id_exercicio || "");
+    var idEx = String(
+      getCell(r, execCol, "id_exercicio", 2) || meta.id_exercicio || "");
     if (!idEx) continue;
 
     var carga = parseFloat(getCell(r, execCol, "carga_absoluta", 4)) || 0;
     var reps = parseInt(getCell(r, execCol, "reps_executadas", 5), 10) || 0;
     var rpe = parseFloat(getCell(r, execCol, "rpe_sessao", 7)) || 0;
     var nomeEx = rxMap[idEx] || idEx;
-    var groupKey = [dateStr, meta.id_ficha || "SEM_FICHA", meta.id_treino || "SEM_TREINO"].join("|");
+    var groupKey = [
+      dateStr,
+      meta.id_ficha || "SEM_FICHA",
+      meta.id_treino || "SEM_TREINO"].join("|");
     var vl = carga * reps;
     var e1rm = reps > 0 ? carga * (1 + reps / 30) : 0;
 
@@ -322,8 +648,7 @@ function getGestaoCargaData(options) {
         countRPE: 0,
         totalSeries: 0,
         exercicioNames: {},
-        exercicios: [],
-      };
+        exercicios: []};
     }
 
     var s = sessoesByGroup[groupKey];
@@ -341,8 +666,7 @@ function getGestaoCargaData(options) {
       reps: reps,
       volumeLoad: vl,
       e1rm: e1rm,
-      rpe: rpe,
-    });
+      rpe: rpe});
   }
 
   var sessoes = [];
@@ -360,15 +684,16 @@ function getGestaoCargaData(options) {
       totalSeries: sessao.totalSeries,
       volumeTotal: sessao.totalVolume,
       rpeMedia:
-        sessao.countRPE > 0 ? Math.round((sessao.totalRPE / sessao.countRPE) * 10) / 10 : 0,
+        sessao.countRPE > 0
+          ? Math.round((sessao.totalRPE / sessao.countRPE) * 10) / 10
+          : 0,
       exercicioPrincipal: principal.nome,
       melhorE1rmSessao: Math.round(best.e1rm * 10) / 10,
       maiorCargaSessao: best.carga,
       duracaoEstimadaMin: sessao.totalSeries * 3,
       origemDados: "DB_Execucao",
       updatedAt: new Date(),
-      exercicios: sessao.exercicios,
-    });
+      exercicios: sessao.exercicios});
   }
 
   sessoes.sort(function (a, b) {
@@ -382,8 +707,7 @@ function getGestaoCargaData(options) {
       e1rmByExercise[ex.nome].push({
         data: s.data,
         e1rm: ex.e1rm,
-        carga: ex.carga,
-      });
+        carga: ex.carga});
     });
   });
 
@@ -391,8 +715,7 @@ function getGestaoCargaData(options) {
   return {
     sessoes: sessoes,
     e1rmByExercise: e1rmByExercise,
-    exercicios: Object.keys(exercicioSet),
-  };
+    exercicios: Object.keys(exercicioSet)};
 }
 
 function buildExerciseNameMap(sheetRx) {
@@ -401,23 +724,28 @@ function buildExerciseNameMap(sheetRx) {
   var rxData = sheetRx.getDataRange().getValues();
   var rxCol = getColumnMap(rxData);
   for (var i = 1; i < rxData.length; i++) {
-    var idIndex = rxCol["id_exercicio"] !== undefined ? rxCol["id_exercicio"] : 2;
+    var idIndex =
+      rxCol["id_exercicio"] !== undefined ? rxCol["id_exercicio"] : 2;
     var idExercicio = rxData[i][idIndex];
-    if (idExercicio) rxMap[String(idExercicio)] = String(idExercicio);
+    if (idExercicio) rxMap[cleanText(idExercicio)] = cleanText(idExercicio);
   }
   return rxMap;
 }
 
 function pickPrincipalExercise(exercicios) {
-  return exercicios.reduce(function (a, b) {
-    return a.volumeLoad > b.volumeLoad ? a : b;
-  }, { nome: "-", volumeLoad: 0 });
+  return exercicios.reduce(
+    function (a, b) {
+      return a.volumeLoad > b.volumeLoad ? a : b;
+    },
+    { nome: "-", volumeLoad: 0 });
 }
 
 function pickBestE1rm(exercicios) {
-  return exercicios.reduce(function (a, b) {
-    return a.e1rm > b.e1rm ? a : b;
-  }, { e1rm: 0, carga: 0 });
+  return exercicios.reduce(
+    function (a, b) {
+      return a.e1rm > b.e1rm ? a : b;
+    },
+    { e1rm: 0, carga: 0 });
 }
 
 function updateGestaoCargaSheet(ss, sessoes) {
@@ -447,9 +775,9 @@ function updateGestaoCargaSheet(ss, sessoes) {
       maior_carga_sessao: s.maiorCargaSessao,
       duracao_estimada_min: s.duracaoEstimadaMin,
       origem_dados: s.origemDados,
-      updated_at: s.updatedAt,
-    };
-    var rowIndex = existingRows[String(s.idResumoSessao)] || sheet.getLastRow() + 1;
+      updated_at: s.updatedAt};
+    var rowIndex =
+      existingRows[String(s.idResumoSessao)] || sheet.getLastRow() + 1;
     setRowByHeaders(sheet, rowIndex, valuesByHeader, GESTAO_CARGA_HEADERS);
     existingRows[String(s.idResumoSessao)] = rowIndex;
   });
@@ -458,7 +786,7 @@ function updateGestaoCargaSheet(ss, sessoes) {
 function syncExecucaoData(records) {
   if (!records || !Array.isArray(records) || records.length === 0)
     return { success: false, error: "Nenhum registro." };
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("DB_Execucao");
   if (!sheet)
     return { success: false, error: "Aba DB_Execucao não encontrada." };
@@ -488,8 +816,7 @@ function syncExecucaoData(records) {
         rec.reps_executadas,
         rec.rir,
         rec.rpe_sessao,
-        "clean",
-      ]);
+        "clean"]);
     }
     syncCount++;
   });
@@ -498,6 +825,18 @@ function syncExecucaoData(records) {
 
 function clientGetPrescricao() {
   return getPrescricaoData();
+}
+function clientGetPrescriptionEditorData() {
+  return getPrescriptionEditorData();
+}
+function clientSavePrescricaoTreino(payload) {
+  return savePrescricaoTreino(payload);
+}
+function clientGetInitialData() {
+  return getInitialAppData();
+}
+function clientGetAppStatus() {
+  return getAppStatus();
 }
 function clientGetExecucao() {
   return getExecucaoData();
@@ -513,11 +852,12 @@ function clientSyncExecucao(records) {
 }
 
 function setupDatabase() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   Object.keys(MANAGED_SHEETS).forEach(function (sheetName) {
     ensureManagedSheet(ss, sheetName, MANAGED_SHEETS[sheetName]);
   });
-  Logger.log("Setup seguro concluido. Dados existentes e abas manuais foram preservados.");
+  Logger.log(
+    "Setup seguro concluido. Dados existentes e abas manuais foram preservados.");
 }
 
 function ensureManagedSheet(ss, name, headers) {
@@ -530,9 +870,12 @@ function ensureManagedSheet(ss, name, headers) {
 
 function ensureHeaders(sheet, expectedHeaders) {
   var lastColumn = Math.max(sheet.getLastColumn(), expectedHeaders.length, 1);
-  var currentHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(function (h) {
-    return String(h).trim();
-  });
+  var currentHeaders = sheet
+    .getRange(1, 1, 1, lastColumn)
+    .getValues()[0]
+    .map(function (h) {
+      return String(h).trim();
+    });
   var currentLower = currentHeaders.map(function (h) {
     return h.toLowerCase();
   });
@@ -564,9 +907,12 @@ function formatHeader(sheet, minColumns) {
 function setRowByHeaders(sheet, rowIndex, valuesByHeader, managedHeaders) {
   ensureHeaders(sheet, managedHeaders);
   var lastColumn = Math.max(sheet.getLastColumn(), managedHeaders.length, 1);
-  var headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(function (h) {
-    return String(h).trim().toLowerCase();
-  });
+  var headers = sheet
+    .getRange(1, 1, 1, lastColumn)
+    .getValues()[0]
+    .map(function (h) {
+      return String(h).trim().toLowerCase();
+    });
   var rowValues = sheet.getRange(rowIndex, 1, 1, lastColumn).getValues()[0];
 
   for (var key in valuesByHeader) {
@@ -579,6 +925,16 @@ function setRowByHeaders(sheet, rowIndex, valuesByHeader, managedHeaders) {
 function getCell(row, col, header, fallbackIndex) {
   if (col[header] !== undefined) return row[col[header]];
   return row[fallbackIndex];
+}
+
+function xsUniquePushServer(list, value) {
+  if (value && list.indexOf(value) === -1) list.push(value);
+}
+
+function cleanText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function formatDateValue(value) {
@@ -606,8 +962,7 @@ function parseSessionId(idSessao) {
     id_exercicio: "",
     semana: "",
     data: "",
-    serie: "",
-  };
+    serie: ""};
   if (parts.length >= 6) {
     result.id_ficha = parts[0];
     result.id_treino = parts[1];

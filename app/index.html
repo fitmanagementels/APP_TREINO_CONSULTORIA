@@ -76,16 +76,16 @@
           data-week="1"
           onclick="App.changeWeek(1)"
         >
-          Semana 1
+          Ciclo 1
         </button>
         <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
-          Semana 2
+          Ciclo 2
         </button>
         <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
-          Semana 3
+          Ciclo 3
         </button>
         <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
-          Semana 4
+          Ciclo 4
         </button>
       </div>
       <!-- Filtros de Treino na Mesma Linha -->
@@ -124,7 +124,37 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- TELA 2: PRESCRIÇÃO (Periodização Dinâmica)             -->
+    <!-- TELA 2: PRESCREVER (Editor de Treino)                  -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-prescrever">
+      <div class="section-title">Prescrever Treino</div>
+      <div class="prescrever-toolbar">
+        <div class="input-group">
+          <label>Ficha</label>
+          <input id="prescrever-ficha" list="prescrever-fichas-list" />
+          <datalist id="prescrever-fichas-list"></datalist>
+        </div>
+        <div class="input-group">
+          <label>Treino</label>
+          <input id="prescrever-treino" list="prescrever-treinos-list" />
+          <datalist id="prescrever-treinos-list"></datalist>
+        </div>
+        <button class="btn-neon" id="prescrever-save-btn">Salvar treino</button>
+      </div>
+      <div id="prescrever-demand-summary"></div>
+      <div class="section-title-row">
+        <div class="section-title">Treino aberto</div>
+        <button class="btn-ghost section-action" id="prescrever-add-exercise-btn">
+          + Adicionar exercício
+        </button>
+      </div>
+      <div id="prescrever-editor-list">
+        <div class="skeleton" style="height: 140px; margin-bottom: 12px"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TELA 3: PRESCRIÇÃO (Periodização Dinâmica)             -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="screen" id="screen-prescricao">
       <div class="ficha-filter-container" style="margin-bottom: 20px">
@@ -150,16 +180,16 @@
           data-week="1"
           onclick="App.changeWeek(1)"
         >
-          Semana 1
+          Ciclo 1
         </button>
         <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
-          Semana 2
+          Ciclo 2
         </button>
         <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
-          Semana 3
+          Ciclo 3
         </button>
         <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
-          Semana 4
+          Ciclo 4
         </button>
       </div>
       <div class="section-title">Exercícios Prescritos</div>
@@ -171,7 +201,7 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- TELA 3: HISTÓRICO (Todas as Execuções)                -->
+    <!-- TELA 4: HISTÓRICO (Todas as Execuções)                -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="screen" id="screen-historico">
       <h2
@@ -192,7 +222,7 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- TELA 4: DASHBOARD DE CARGA DE TREINO                  -->
+    <!-- TELA 5: DASHBOARD DE CARGA DE TREINO                  -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="screen" id="screen-carga">
       <div class="section-title">Performance — Carga de Treino</div>
@@ -339,6 +369,42 @@
       </div>
     </div>
 
+    <!-- ═══ ADD EXERCISE MODAL ═══ -->
+    <div class="rpe-modal-overlay" id="prescrever-catalog-modal">
+      <div class="prescrever-catalog-modal">
+        <div class="modal-head">
+          <h2 id="prescrever-catalog-title">Adicionar exercício</h2>
+          <button id="prescrever-catalog-close">&times;</button>
+        </div>
+        <div class="prescrever-filters">
+          <div class="input-group">
+            <label>Buscar exercício</label>
+            <input id="prescrever-search" placeholder="Digite o nome" />
+          </div>
+          <div class="input-group">
+            <label>Grupo muscular</label>
+            <select id="prescrever-grupo"></select>
+          </div>
+        </div>
+        <div id="prescrever-catalog-list">
+          <div class="skeleton" style="height: 72px; margin-bottom: 8px"></div>
+          <div class="skeleton" style="height: 72px; margin-bottom: 8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ DEMAND DETAIL MODAL ═══ -->
+    <div class="rpe-modal-overlay" id="prescrever-demand-modal">
+      <div class="prescrever-demand-modal">
+        <div class="modal-head">
+          <h2 id="prescrever-demand-title">Demanda muscular</h2>
+          <button id="prescrever-demand-close">&times;</button>
+        </div>
+        <div id="prescrever-demand-table"></div>
+        <div id="prescrever-demand-detail"></div>
+      </div>
+    </div>
+
     <!-- ═══ BOTTOM NAVIGATION ═══ -->
     <nav class="bottom-nav">
       <button class="nav-item active" data-screen="treino">
@@ -348,6 +414,10 @@
       <button class="nav-item" data-screen="prescricao">
         <span class="nav-icon">📋</span>
         <span class="nav-label">Prescrição</span>
+      </button>
+      <button class="nav-item" data-screen="prescrever">
+        <span class="nav-icon">✍️</span>
+        <span class="nav-label">Prescrever</span>
       </button>
       <button class="nav-item" data-screen="historico">
         <span class="nav-icon">🕒</span>
@@ -422,6 +492,9 @@
       })();
     </script>
 
+    <script>
+      window.__XS_BOOTSTRAP__ = <?!= getInitialAppDataJson(); ?>;
+    </script>
     <?!= include('script'); ?>
   </body>
 </html>
