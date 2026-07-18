@@ -99,7 +99,7 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 
 ## Informações importantes vindas do chat
 
-- O usuário solicitou que este arquivo e `docs/index.html` funcionem como documentação de **status e continuidade**.
+- O usuário solicitou que este arquivo e `docs/knowledge hub.html` funcionem como documentação de **status e continuidade**.
 - A cópia publicada no GitHub deve acompanhar a reorganização documental.
 - A documentação não substitui o deploy no Google Apps Script: GitHub e Apps Script são etapas separadas.
 
@@ -127,7 +127,7 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 | `app/script.html` | Lógica do frontend. | Usar sintaxe conservadora compatível com `HtmlService`. |
 | `app/style.html` | Estilos do Web App. | Inclui acabamento visual e variação de luz por aba. |
 | `docs/RESUMO_PROJETO.md` | Fonte de verdade de status e continuidade. | Atualizar primeiro quando o estado mudar. |
-| `docs/index.html` | Leitura visual do resumo. | Deve espelhar este documento, sem narrativa divergente. |
+| `docs/knowledge hub.html` | Leitura visual do resumo. | Deve espelhar este documento, sem narrativa divergente. |
 | `docs/ARQUITETURA_IA_HIBRIDA.md` | Detalhe da arquitetura de memória/IA. | Complementa, não substitui, este resumo. |
 | `tests/app-regression.test.js` | Proteções de regressão e compatibilidade. | Executar após mudanças em app ou docs. |
 | `tests/frontend-polish.test.js` | Proteções do acabamento visual. | Executar após mudanças de estilo. |

@@ -7,7 +7,7 @@ const code = fs.readFileSync(path.join(root, "app", "Código.gs"), "utf8");
 const index = fs.readFileSync(path.join(root, "app", "index.html"), "utf8");
 const script = fs.readFileSync(path.join(root, "app", "script.html"), "utf8");
 const style = fs.readFileSync(path.join(root, "app", "style.html"), "utf8");
-const docsViewer = fs.readFileSync(path.join(root, "docs", "index.html"), "utf8");
+const docsViewer = fs.readFileSync(path.join(root, "docs", "knowledge hub.html"), "utf8");
 
 function bodyOf(source, name) {
   const match = new RegExp(`(?:function\\s+${name}|^\\s*${name})\\s*\\(`, "m").exec(
