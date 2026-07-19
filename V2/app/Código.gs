@@ -152,31 +152,25 @@ function include(f) {
 
 function routeAction(p) {
   try {
+    p = p || {};
     switch (p.action) {
-      case "getInitialData":
-        return { success: true, data: getInitialAppData() };
-      case "getAppStatus":
-        return { success: true, data: getAppStatus() };
-      case "getPrescricao":
-        return { success: true, data: getPrescricaoData() };
-      case "getPrescriptionEditorData":
-        return { success: true, data: getPrescriptionEditorData() };
-      case "savePrescricaoTreino":
-        return savePrescricaoTreino(p.payload || p.data || p);
-      case "getExecucao":
-        return { success: true, data: getExecucaoData() };
+      case "getTenantBootstrap":
+        return { success: true, data: getTenantBootstrap() };
+      case "getVisibleFichas":
+        return { success: true, data: getVisibleFichas() };
+      case "getActiveFicha":
+        return { success: true, data: getActiveFicha() };
+      case "getTreinoSession":
+        return { success: true, data: getTreinoSessionBootstrap(p.payload || p) };
+      case "syncTenantSession":
+        return syncTenantSession(p.payload || p);
       case "getHistorico":
-        return { success: true, data: getExecucaoData() };
-      case "getGestaoCarga":
-        return {
-          success: true,
-          data: getGestaoCargaData({
-            updateSheet: p.updateSheet === true || p.updateSheet === "true"})};
-      case "syncExecucao":
-        return syncExecucaoData(p.records || p.data);
+        return { success: true, data: getTenantHistorico() };
+      case "getProgressData":
+        return { success: true, data: getProgressData(p.payload || p) };
       case "setupDatabase":
-        var setupResult = setupDatabase();
-        return { success: true, data: setupResult || null };
+        setupDatabase();
+        return { success: true };
       default:
         return { success: false, error: "Ação desconhecida: " + p.action };
     }
@@ -972,4 +966,426 @@ function parseSessionId(idSessao) {
     result.serie = parts[parts.length - 1];
   }
   return result;
+}
+
+// =====================================================================
+// V2 tenant contract. The manager provisions these tabs before release.
+// All reads are local to the student's spreadsheet.
+// =====================================================================
+var TENANT_FICHAS_HEADERS = [
+  "ficha_id",
+  "nome_ficha",
+  "visibilidade_aluno",
+  "estado_uso",
+  "publicacao_id",
+  "data_inicio",
+  "data_fim",
+  "observacoes",
+  "updated_at"
+];
+var TENANT_CATALOGO_HEADERS = [
+  "exercicio_id",
+  "nome_exercicio",
+  "grupo_muscular",
+  "tipo_exercicio",
+  "ativo",
+  "versao_catalogo",
+  "updated_at"
+];
+var TENANT_SUBSTITUTOS_HEADERS = [
+  "substituto_id",
+  "prescricao_item_id",
+  "ficha_id",
+  "treino_id",
+  "exercicio_id_substituto",
+  "ordem",
+  "observacao",
+  "ativo"
+];
+var TENANT_REFERENCIAS_HEADERS = [
+  "referencia_id",
+  "referencia_tipo",
+  "ficha_id",
+  "treino_id",
+  "exercicio_id",
+  "sessao_id",
+  "ocorreu_em",
+  "pse_sessao",
+  "series_json",
+  "updated_at"
+];
+
+PRESCRICAO_HEADERS = PRESCRICAO_HEADERS.concat([
+  "prescricao_item_id",
+  "publicacao_id",
+  "estado_publicacao",
+  "zona_rir",
+  "nome_exercicio"
+]);
+EXECUCAO_HEADERS = EXECUCAO_HEADERS.concat([
+  "id_operacao",
+  "id_ficha",
+  "id_treino",
+  "publicacao_id",
+  "prescricao_item_id",
+  "exercicio_prescrito_id",
+  "tipo_execucao",
+  "estado_execucao",
+  "ordem_exercicio",
+  "serie",
+  "pse_sessao",
+  "updated_at"
+]);
+MANAGED_SHEETS.DB_Prescricao = PRESCRICAO_HEADERS;
+MANAGED_SHEETS.DB_Execucao = EXECUCAO_HEADERS;
+MANAGED_SHEETS.DB_Fichas = TENANT_FICHAS_HEADERS;
+MANAGED_SHEETS.DB_Catalogo_Exercicios = TENANT_CATALOGO_HEADERS;
+MANAGED_SHEETS.DB_Prescricao_Substitutos = TENANT_SUBSTITUTOS_HEADERS;
+MANAGED_SHEETS.DB_Referencia_Exercicio = TENANT_REFERENCIAS_HEADERS;
+
+function ensureTenantSchema() {
+  var ss = getSpreadsheet();
+  Object.keys(MANAGED_SHEETS).forEach(function (sheetName) {
+    ensureManagedSheet(ss, sheetName, MANAGED_SHEETS[sheetName]);
+  });
+  return ss;
+}
+
+function tenantSheetRows(sheetName) {
+  var ss = ensureTenantSchema();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0].map(function (value) {
+    return String(value || "").trim().toLowerCase();
+  });
+  return values.slice(1).filter(function (row) {
+    return row.join("").trim() !== "";
+  }).map(function (row) {
+    var item = {};
+    headers.forEach(function (header, index) {
+      item[header] = row[index];
+    });
+    return item;
+  });
+}
+
+function tenantValue(record, name) {
+  var value = record[String(name).toLowerCase()];
+  return value === undefined || value === null ? "" : value;
+}
+
+function tenantText(record, name) {
+  return String(tenantValue(record, name) || "").trim();
+}
+
+function tenantIsVisible(record) {
+  var value = tenantText(record, "visibilidade_aluno").toLowerCase();
+  return value === "visivel" || value === "visível" || value === "true" || value === "sim";
+}
+
+function tenantIsActive(record) {
+  var value = tenantText(record, "estado_uso").toLowerCase();
+  return value === "ativa" || value === "ativo" || value === "true";
+}
+
+function getVisibleFichas() {
+  return tenantSheetRows("DB_Fichas").filter(tenantIsVisible).map(function (row) {
+    return {
+      ficha_id: tenantText(row, "ficha_id"),
+      nome_ficha: tenantText(row, "nome_ficha"),
+      publicacao_id: tenantText(row, "publicacao_id"),
+      estado_uso: tenantText(row, "estado_uso"),
+      data_inicio: tenantValue(row, "data_inicio"),
+      data_fim: tenantValue(row, "data_fim"),
+      observacoes: tenantText(row, "observacoes")
+    };
+  });
+}
+
+function getActiveFicha() {
+  var active = getVisibleFichas().filter(function (ficha) {
+    var value = String(ficha.estado_uso || "").toLowerCase();
+    return value === "ativa" || value === "ativo" || value === "true";
+  });
+  if (active.length > 1) throw new Error("Há mais de uma ficha ativa. Peça ao treinador para corrigir a publicação.");
+  return active.length === 1 ? active[0] : null;
+}
+
+function getTenantHistorico() {
+  var rows = tenantSheetRows("DB_Execucao");
+  var sessions = {};
+  rows.forEach(function (row) {
+    var state = tenantText(row, "estado_execucao").toLowerCase();
+    if (state === "nao_realizado" || state === "não_realizado") return;
+    var sessionId = tenantText(row, "id_sessao");
+    if (!sessionId) return;
+    if (!sessions[sessionId]) {
+      sessions[sessionId] = {
+        id_sessao: sessionId,
+        data_treino: tenantValue(row, "data_treino"),
+        ficha_id: tenantText(row, "id_ficha"),
+        treino_id: tenantText(row, "id_treino"),
+        pse: tenantValue(row, "pse_sessao") || tenantValue(row, "rpe_sessao"),
+        total_series: 0,
+        exercicios: {},
+        volume_total: 0,
+        records: []
+      };
+    }
+    var session = sessions[sessionId];
+    var exerciseId = tenantText(row, "id_exercicio");
+    session.total_series++;
+    session.exercicios[exerciseId] = true;
+    session.volume_total += Number(tenantValue(row, "carga_absoluta") || 0) * Number(tenantValue(row, "reps_executadas") || 0);
+    session.records.push(row);
+  });
+  return Object.keys(sessions).map(function (id) {
+    var session = sessions[id];
+    session.total_exercicios = Object.keys(session.exercicios).length;
+    delete session.exercicios;
+    return session;
+  }).sort(function (a, b) {
+    return new Date(b.data_treino).getTime() - new Date(a.data_treino).getTime();
+  });
+}
+
+function getTenantBootstrap() {
+  var fichas = getVisibleFichas();
+  var catalog = tenantSheetRows("DB_Catalogo_Exercicios");
+  var active = getActiveFicha();
+  var treinos = [];
+  if (active) tenantSheetRows("DB_Prescricao").forEach(function (row) {
+    var treino = tenantText(row, "id_treino");
+    if (tenantText(row, "id_ficha") === active.ficha_id && treino && treinos.indexOf(treino) === -1) treinos.push(treino);
+  });
+  var version = "";
+  catalog.some(function (row) {
+    version = tenantText(row, "versao_catalogo");
+    return version !== "";
+  });
+  return {
+    fichas: fichas,
+    ficha_ativa: active,
+    treinos_ativos: treinos,
+    historico: getTenantHistorico().slice(0, 20),
+    versao_catalogo: version,
+    atualizado_em: new Date().toISOString()
+  };
+}
+
+function tenantCurrentCycleValue(row, field, cycle) {
+  var direct = tenantValue(row, field);
+  if (direct !== "") return direct;
+  return tenantValue(row, "semana_" + cycle + "_" + field);
+}
+
+function tenantCatalogMap() {
+  var map = {};
+  tenantSheetRows("DB_Catalogo_Exercicios").forEach(function (row) {
+    map[tenantText(row, "exercicio_id")] = row;
+  });
+  return map;
+}
+
+function tenantReferencesFor(exerciseId, fichaId, treinoId) {
+  var rows = tenantSheetRows("DB_Referencia_Exercicio").filter(function (row) {
+    return tenantText(row, "exercicio_id") === String(exerciseId);
+  }).sort(function (a, b) {
+    return new Date(tenantValue(b, "ocorreu_em")).getTime() - new Date(tenantValue(a, "ocorreu_em")).getTime();
+  });
+  var comparable = rows.filter(function (row) {
+    return tenantText(row, "ficha_id") === String(fichaId) && tenantText(row, "treino_id") === String(treinoId);
+  })[0] || null;
+  return { comparavel: comparable, exercicio: rows[0] || null };
+}
+
+function getTreinoSessionBootstrap(payload) {
+  payload = payload || {};
+  var active = getActiveFicha();
+  if (!active) throw new Error("Não há ficha ativa para iniciar um treino.");
+  var treinoId = String(payload.treino_id || "");
+  if (!treinoId) throw new Error("Selecione um treino antes de iniciar.");
+  var cycle = String(payload.ciclo || "1");
+  var catalog = tenantCatalogMap();
+  var prescriptions = tenantSheetRows("DB_Prescricao").filter(function (row) {
+    return tenantText(row, "id_ficha") === active.ficha_id && tenantText(row, "id_treino") === treinoId;
+  }).sort(function (a, b) {
+    return Number(tenantValue(a, "ordem_exercicio") || 0) - Number(tenantValue(b, "ordem_exercicio") || 0);
+  });
+  var substitutes = tenantSheetRows("DB_Prescricao_Substitutos").filter(function (row) {
+    var value = tenantText(row, "ativo").toLowerCase();
+    return value !== "false" && value !== "nao" && value !== "não";
+  });
+  var items = prescriptions.map(function (row) {
+    var itemId = tenantText(row, "prescricao_item_id") || tenantText(row, "id_exercicio") + "_" + treinoId;
+    var exerciseId = tenantText(row, "id_exercicio");
+    var catalogItem = catalog[exerciseId] || {};
+    var allowed = substitutes.filter(function (sub) {
+      return tenantText(sub, "prescricao_item_id") === itemId;
+    }).map(function (sub) {
+      var substituteExercise = catalog[tenantText(sub, "exercicio_id_substituto")] || {};
+      return {
+        exercicio_id: tenantText(sub, "exercicio_id_substituto"),
+        nome_exercicio: tenantText(substituteExercise, "nome_exercicio"),
+        observacao: tenantText(sub, "observacao")
+      };
+    });
+    return {
+      prescricao_item_id: itemId,
+      exercicio_id: exerciseId,
+      nome_exercicio: tenantText(row, "nome_exercicio") || tenantText(catalogItem, "nome_exercicio"),
+      ordem_exercicio: Number(tenantValue(row, "ordem_exercicio") || 0),
+      sets: tenantCurrentCycleValue(row, "sets", cycle),
+      reps: tenantCurrentCycleValue(row, "reps", cycle),
+      descanso: tenantCurrentCycleValue(row, "descanso", cycle),
+      zona_rir: tenantCurrentCycleValue(row, "zona_rir", cycle),
+      observacoes: tenantText(row, "observacoes"),
+      substitutos: allowed,
+      referencia: tenantReferencesFor(exerciseId, active.ficha_id, treinoId).comparavel
+    };
+  });
+  return {
+    ficha: active,
+    treino_id: treinoId,
+    ciclo: cycle,
+    exercicios: items,
+    catalogo: Object.keys(catalog).map(function (id) {
+      var row = catalog[id];
+      return {
+        exercicio_id: id,
+        nome_exercicio: tenantText(row, "nome_exercicio"),
+        grupo_muscular: tenantText(row, "grupo_muscular")
+      };
+    })
+  };
+}
+
+function tenantOperationExists(sheet, operationId) {
+  if (!operationId || sheet.getLastRow() < 2) return false;
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0].map(function (value) { return String(value).toLowerCase(); });
+  var index = headers.indexOf("id_operacao");
+  if (index < 0) return false;
+  return values.slice(1).some(function (row) { return String(row[index]) === String(operationId); });
+}
+
+function appendTenantRows(sheet, headers, records) {
+  if (records.length === 0) return;
+  ensureHeaders(sheet, headers);
+  var allHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function (value) {
+    return String(value).toLowerCase();
+  });
+  var rows = records.map(function (record) {
+    return allHeaders.map(function (header) {
+      return record[header] === undefined ? "" : record[header];
+    });
+  });
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, allHeaders.length).setValues(rows);
+}
+
+function syncTenantSession(payload) {
+  payload = payload || {};
+  var records = payload.records || [];
+  var pse = payload.pse;
+  if (!Array.isArray(records) || records.length === 0) return { success: false, error: "Nenhum exercício foi registrado." };
+  if (pse === "" || pse === null || pse === undefined) return { success: false, error: "A PSE da sessão é obrigatória." };
+  var active = getActiveFicha();
+  if (!active || String(payload.ficha_id) !== String(active.ficha_id)) {
+    return { success: false, error: "A ficha não está mais ativa. Atualize o aplicativo antes de finalizar." };
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return { success: false, error: "A sessão está sendo sincronizada. Tente novamente em alguns segundos." };
+  try {
+    var ss = ensureTenantSchema();
+    var executionSheet = ss.getSheetByName("DB_Execucao");
+    var operationId = String(payload.id_operacao || payload.id_sessao || "");
+    if (!operationId) return { success: false, error: "Identificador da sessão ausente." };
+    if (tenantOperationExists(executionSheet, operationId)) return { success: true, synced: 0, duplicate: true };
+    var now = new Date().toISOString();
+    var sessionId = String(payload.id_sessao || operationId);
+    var date = payload.data_treino || now;
+    var values = records.map(function (record, index) {
+      return {
+        id_sessao: sessionId,
+        id_operacao: operationId,
+        data_treino: date,
+        id_ficha: active.ficha_id,
+        id_treino: payload.treino_id || "",
+        publicacao_id: active.publicacao_id,
+        prescricao_item_id: record.prescricao_item_id || "",
+        id_exercicio: record.exercicio_id || "",
+        exercicio_prescrito_id: record.exercicio_prescrito_id || record.exercicio_id || "",
+        tipo_execucao: record.tipo_execucao || "prescrito",
+        estado_execucao: record.estado_execucao || "realizado",
+        ordem_exercicio: record.ordem_exercicio || index + 1,
+        serie: record.serie || "",
+        carga_absoluta: record.carga_absoluta || "",
+        reps_executadas: record.reps_executadas || "",
+        rir: record.rir === undefined || record.rir === "" ? "-" : record.rir,
+        pse_sessao: pse,
+        rpe_sessao: pse,
+        sync_status: "clean",
+        updated_at: now
+      };
+    });
+    appendTenantRows(executionSheet, EXECUCAO_HEADERS, values);
+    var references = values.filter(function (record) {
+      return record.estado_execucao === "realizado";
+    }).map(function (record) {
+      return {
+        referencia_id: sessionId + "_" + record.id_exercicio + "_" + record.serie,
+        referencia_tipo: record.tipo_execucao === "prescrito" ? "comparavel" : "exercicio",
+        ficha_id: record.id_ficha,
+        treino_id: record.id_treino,
+        exercicio_id: record.id_exercicio,
+        sessao_id: sessionId,
+        ocorreu_em: date,
+        pse_sessao: pse,
+        series_json: JSON.stringify({ carga: record.carga_absoluta, reps: record.reps_executadas, rir: record.rir }),
+        updated_at: now
+      };
+    });
+    appendTenantRows(ss.getSheetByName("DB_Referencia_Exercicio"), TENANT_REFERENCIAS_HEADERS, references);
+    return { success: true, synced: values.length, id_sessao: sessionId };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function calculateBrzyckiE1rm(carga, repeticoes, rir) {
+  if (rir === "-" || rir === "6+" || rir === "" || rir === null || rir === undefined) return null;
+  var load = Number(carga);
+  var reps = Number(repeticoes);
+  var rirValue = Number(rir);
+  var effectiveReps = reps + rirValue;
+  if (!isFinite(load) || !isFinite(reps) || !isFinite(rirValue) || load <= 0 || rirValue < 0 || rirValue > 5 || effectiveReps < 1 || effectiveReps > 10) return null;
+  return load / (1.0278 - 0.0278 * effectiveReps);
+}
+
+function getProgressData(payload) {
+  payload = payload || {};
+  var rows = tenantSheetRows("DB_Execucao").filter(function (row) {
+    return tenantText(row, "estado_execucao") === "realizado";
+  });
+  var bySession = {};
+  var byExercise = {};
+  rows.forEach(function (row) {
+    var sessionId = tenantText(row, "id_sessao");
+    if (!bySession[sessionId]) bySession[sessionId] = row;
+    var exerciseId = tenantText(row, "id_exercicio");
+    var e1rm = calculateBrzyckiE1rm(tenantValue(row, "carga_absoluta"), tenantValue(row, "reps_executadas"), tenantValue(row, "rir"));
+    if (e1rm !== null) {
+      if (!byExercise[exerciseId]) byExercise[exerciseId] = [];
+      byExercise[exerciseId].push({ data: tenantValue(row, "data_treino"), e1rm: e1rm, sessao_id: sessionId });
+    }
+  });
+  var series = Object.keys(byExercise).map(function (exerciseId) {
+    var bestBySession = {};
+    byExercise[exerciseId].forEach(function (point) {
+      if (!bestBySession[point.sessao_id] || point.e1rm > bestBySession[point.sessao_id].e1rm) bestBySession[point.sessao_id] = point;
+    });
+    return { exercicio_id: exerciseId, pontos: Object.keys(bestBySession).map(function (id) { return bestBySession[id]; }) };
+  });
+  return { sessoes: Object.keys(bySession).length, e1rm_por_exercicio: series };
 }

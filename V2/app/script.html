@@ -1,1654 +1,278 @@
 <script>
-// =====================================================================
-// XSTeam Wellness V2.0 — Single-Tenant | SVG Charts | Offline-First
-// =====================================================================
-
-function xsUniquePush(list, value) {
-  if (value && list.indexOf(value) === -1) list.push(value);
-}
-
-function xsObjectValues(obj) {
-  var values = [];
-  var source = obj || {};
-  Object.keys(source).forEach(function (key) {
-    values.push(source[key]);
-  });
-  return values;
-}
-
-function xsEachNode(nodes, callback) {
-  for (var i = 0; i < nodes.length; i++) {
-    callback(nodes[i], i);
-  }
-}
-
-function xsEscapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function xsEscapeJsString(value) {
-  return String(value || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
-    .replace(/\r?\n/g, " ");
-}
-
-function xsSelectOptions(values, selected, includeAll) {
-  var html = includeAll ? '<option value="">Todos</option>' : "";
-  (values || []).forEach(function (value) {
-    var sel = String(value) === String(selected) ? " selected" : "";
-    html += '<option value="' + xsEscapeHtml(value) + '"' + sel + ">" + xsEscapeHtml(value) + "</option>";
-  });
-  return html;
-}
-
 var App = {
+  bootstrap: null,
+  activeFicha: null,
+  currentSession: null,
   currentScreen: "treino",
-  currentWeek: 1,
-  prescricaoCache: [],
-  historicoCache: [],
-  cargaCache: null,
-  catalogoCache: [],
-  catalogoMeta: null,
-  editorDataLoaded: false,
-  prescreverDraft: null,
-  prescreverSearch: "",
-  prescreverGrupo: "",
-  catalogTargetIndex: null,
-  catalogMode: "prescrever",
-  demandModalData: null,
-  selectedDemandMuscleIndex: 0,
-  cycleLabels: ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4"],
-  appStatus: null,
-  pendingSync: [],
-  sessionRPE: null,
-  selectedChartExercises: null,
-  dataWarning: "",
-  selectedFicha: "",
-  selectedTreino: "",
-  selectedDate: "",
-  exerciseSets: {},
-  // ── BOOT ──
+  RIR_OPTIONS: ["-", "0", "0.5", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5", "6+"],
   init: function init() {
-    var _this = this;
-    window.__xsAppBootStarted = true;
-    this.setLoaderStatus("Iniciando aplicativo...");
-    this.selectedDate = new Date().toLocaleDateString("en-CA");
-    var dInput = document.getElementById("treino-date");
-    if (dInput) dInput.value = this.selectedDate;
-    try {
-      this.loadPending();
-      this.updateSyncBadge();
-      this.bindNavigation();
-      this.bindSync();
-      this.bindInlineControls();
-      this.fetchInitialData();
-    } catch (err) {
-      console.error("[XSTeam init]", err);
-      this.setLoaderStatus("Erro ao iniciar. Abrindo modo seguro...");
-      this.finishInitialRender("Erro ao iniciar; usando modo seguro.");
-    }
-    setInterval(function () {
-      if (navigator.onLine) _this.syncToServer();
-    }, 30000);
-    window.addEventListener("online", function () {
-      return _this.showToast("Conexão restaurada", "success");
-    });
-    window.addEventListener("offline", function () {
-      return _this.showToast("Modo Offline ativado", "warning");
-    });
+    this.restorePendingSession();
+    this.refresh();
   },
-  fetchInitialData: function fetchInitialData() {
-    var _this2 = this;
-    this.setLoaderStatus("Buscando prescrição e histórico...");
-    this.dataWarning = "";
-    var finalized = false;
-    var finishWithCache = function finishWithCache() {
-      var cachedPrescricao = _this2.readCache("xs_prescricao", []);
-      var cachedHistorico = _this2.readCache("xs_historico", []);
-      if (cachedPrescricao.length > 0) _this2.prescricaoCache = cachedPrescricao;
-      if (cachedHistorico.length > 0) _this2.historicoCache = cachedHistorico;
-      if (!finalized) {
-        finalized = true;
-        _this2.finishInitialRender();
-        _this2.showToast("Carregamento parcial usando dados locais", "warning");
-      }
-    };
-    setTimeout(finishWithCache, 12000);
-    this.readInitialData().then(function (data) {
-      if (finalized) return;
-      finalized = true;
-      _this2.applyInitialData(data);
-      _this2.finishInitialRender();
-      _this2.loadGestaoCargaInBackground();
-    }).catch(function (err) {
-      var detail = err && err.message ? " Detalhe: " + err.message : "";
-      _this2.prescricaoCache = _this2.readCache("xs_prescricao", []);
-      _this2.historicoCache = _this2.readCache("xs_historico", []);
-      _this2.showDataWarning("Falha ao ler dados da planilha. Usando cache local." + detail);
-      _this2.finishInitialRender();
-      console.error("[XSTeam initial data]", err);
-    });
-  },
-  readInitialData: function readInitialData() {
-    var boot = window.__XS_BOOTSTRAP__;
-    if (boot && boot.success !== false) {
-      window.__XS_BOOTSTRAP__ = null;
-      return Promise.resolve(boot);
-    }
-    return this.callServer("getInitialData", "clientGetInitialData");
-  },
-  applyInitialData: function applyInitialData(data) {
-    data = data || {};
-    var prescricao = data.prescricao || {};
-    var historico = data.historico || {};
-    var rows = prescricao && Array.isArray(prescricao.rows) ? prescricao.rows : [];
-    var historicoRows = historico && Array.isArray(historico.rows) ? historico.rows : [];
-    this.prescricaoCache = rows;
-    this.historicoCache = historicoRows;
-    this.appStatus = data.status || this.appStatus;
-    if (rows.length === 0) {
-      this.setLoaderStatus("Prescrição vazia.");
-      this.showDataWarning("Prescrição vazia. Verifique a aba DB_Prescricao e o preenchimento de id_exercicio.");
-    } else {
-      this.setLoaderStatus("Prescrição carregada.");
-    }
-    if (data.error) this.showDataWarning("Dados carregados parcialmente. " + data.error);
-    this.writeCache("xs_prescricao", this.prescricaoCache);
-    this.writeCache("xs_historico", this.historicoCache);
-    this.writeCache("xs_app_status", this.appStatus);
-  },
-  loadGestaoCargaInBackground: function loadGestaoCargaInBackground() {
-    var _this3 = this;
-    this.callServer("getGestaoCarga", "clientGetGestaoCarga").then(function (data) {
-      _this3.cargaCache = data;
-      _this3.writeCache("xs_carga", _this3.cargaCache);
-    }).catch(function () {
-      _this3.cargaCache = _this3.readCache("xs_carga", null);
-    });
-  },
-  loadAppStatusInBackground: function loadAppStatusInBackground() {
-    var _this4 = this;
-    this.callServer("getAppStatus", "clientGetAppStatus").then(function (data) {
-      _this4.appStatus = data;
-      _this4.writeCache("xs_app_status", _this4.appStatus);
-    }).catch(function (err) {
-      _this4.appStatus = _this4.readCache("xs_app_status", null);
-      console.warn("[XSTeam app status]", err);
-    });
-  },
-  showDataWarning: function showDataWarning(message) {
-    this.dataWarning = message;
-    console.warn("[XSTeam data]", message, this.appStatus || "");
-  },
-  hideGlobalLoader: function hideGlobalLoader() {
-    if (window.__xsReleaseLoader) {
-      window.__xsReleaseLoader("app ready");
-      return;
-    }
-    var loader = document.getElementById("global-loader");
-    if (loader) loader.classList.add("hidden");
-  },
-  setLoaderStatus: function setLoaderStatus(message) {
-    if (window.__xsSetLoaderStatus) window.__xsSetLoaderStatus(message);
-  },
-  buildActionUrl: function buildActionUrl(action) {
-    var base = window.location.href.split("#")[0].split("?")[0];
-    return base + "?action=" + encodeURIComponent(action);
-  },
-  fetchServerAction: function fetchServerAction(action, payload) {
-    var url = this.buildActionUrl(action);
-    var bodyPayload = { action: action };
-    if (payload) {
-      Object.keys(payload).forEach(function (key) {
-        bodyPayload[key] = payload[key];
-      });
-    }
-    var options = payload ? {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(bodyPayload)
-    } : {
-      method: "GET",
-      headers: {
-        Accept: "application/json"
-      }
-    };
-    return fetch(url, options).then(function (response) {
-      if (!response.ok) {
-        throw new Error("HTTP " + response.status);
-      }
-      return response.json();
-    }).then(function (result) {
-      if (!result || result.success === false) {
-        throw new Error(result && result.error || "Falha em " + action);
-      }
-      if (result.success === true && result.data === null && action.indexOf("get") === 0) {
-        throw new Error("Resposta vazia em " + action);
-      }
-      return result.data !== undefined ? result.data : result;
-    });
-  },
-  callServer: function callServer(action, googleMethod, payload) {
-    var _this5 = this;
+  call: function call(action, payload) {
     return new Promise(function (resolve, reject) {
-      var fallbackToFetch = function fallbackToFetch() {
-        _this5.fetchServerAction(action, payload).then(resolve).catch(reject);
-      };
+      var request = { action: action, payload: payload || {} };
       if (window.google && google.script && google.script.run) {
-        try {
-          var runner = google.script.run.withSuccessHandler(function (result) {
-            if (result === null || result === undefined) {
-              reject(new Error("Resposta vazia do Apps Script"));
-              return;
-            }
-            resolve(result);
-          }).withFailureHandler(reject);
-          if (googleMethod === "clientGetInitialData") {
-            runner.clientGetInitialData();
-          } else if (googleMethod === "clientGetPrescriptionEditorData") {
-            runner.clientGetPrescriptionEditorData();
-          } else if (googleMethod === "clientSavePrescricaoTreino") {
-            runner.clientSavePrescricaoTreino(payload);
-          } else if (googleMethod === "clientGetPrescricao") {
-            runner.clientGetPrescricao();
-          } else if (googleMethod === "clientGetHistorico") {
-            runner.clientGetHistorico();
-          } else if (googleMethod === "clientGetGestaoCarga") {
-            runner.clientGetGestaoCarga();
-          } else if (googleMethod === "clientGetAppStatus") {
-            runner.clientGetAppStatus();
-          } else if (googleMethod === "clientSyncExecucao") {
-            runner.clientSyncExecucao(payload.records || payload);
-          } else {
-            reject(new Error("Metodo Apps Script nao mapeado: " + googleMethod));
-          }
-          return;
-        } catch (err) {
-          reject(err);
-          return;
-        }
-      }
-      fallbackToFetch();
-    });
-  },
-  finishInitialRender: function finishInitialRender(message) {
-    try {
-      this.populateFilters();
-      this.switchScreen("treino");
-    } catch (err) {
-      console.error("[XSTeam initial render]", err);
-    } finally {
-      this.hideGlobalLoader();
-      if (message) this.showToast(message, "warning");
-    }
-  },
-  readCache: function readCache(key, fallback) {
-    try {
-      var cached = localStorage.getItem(key);
-      return cached ? JSON.parse(cached) : fallback;
-    } catch (err) {
-      return fallback;
-    }
-  },
-  writeCache: function writeCache(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (err) {
-      // Storage can fail in private mode or when quota is full.
-    }
-  },
-  manualRefresh: function manualRefresh() {
-    document.getElementById("global-loader").classList.remove("hidden");
-    this.fetchInitialData();
-  },
-  // ── NAV ──
-  bindNavigation: function bindNavigation() {
-    var _this6 = this;
-    xsEachNode(document.querySelectorAll(".nav-item"), function (item) {
-      item.addEventListener("click", function () {
-        return _this6.switchScreen(item.getAttribute("data-screen"));
-      });
-    });
-  },
-  bindInlineControls: function bindInlineControls() {
-    var _this7 = this;
-    var fichaPrescricao = document.getElementById("ficha-filter-prescricao");
-    if (fichaPrescricao) {
-      fichaPrescricao.addEventListener("change", function () {
-        var fichaTreino = document.getElementById("ficha-filter");
-        if (fichaTreino) fichaTreino.value = fichaPrescricao.value;
-        _this7.filterFicha();
-      });
-    }
-    var historyModalClose = document.getElementById("history-modal-close");
-    if (historyModalClose) {
-      historyModalClose.addEventListener("click", function () {
-        document.getElementById("history-modal").classList.remove("show");
-      });
-    }
-    var chartSettingsClose = document.getElementById("chart-settings-close");
-    if (chartSettingsClose) {
-      chartSettingsClose.addEventListener("click", function () {
-        document.getElementById("chart-settings-modal").classList.remove("show");
-      });
-    }
-    var prescreverFicha = document.getElementById("prescrever-ficha");
-    var prescreverTreino = document.getElementById("prescrever-treino");
-    var prescreverSearch = document.getElementById("prescrever-search");
-    var prescreverGrupo = document.getElementById("prescrever-grupo");
-    var prescreverSave = document.getElementById("prescrever-save-btn");
-    var prescreverAdd = document.getElementById("prescrever-add-exercise-btn");
-    var prescreverCatalogClose = document.getElementById("prescrever-catalog-close");
-    var prescreverDemandClose = document.getElementById("prescrever-demand-close");
-    if (prescreverFicha) {
-      prescreverFicha.addEventListener("change", function () {
-        _this7.updatePrescreverIdentity();
-      });
-    }
-    if (prescreverTreino) {
-      prescreverTreino.addEventListener("change", function () {
-        _this7.updatePrescreverIdentity();
-      });
-    }
-    if (prescreverSearch) {
-      prescreverSearch.addEventListener("input", function () {
-        _this7.prescreverSearch = prescreverSearch.value;
-        _this7.renderPrescreverCatalog();
-      });
-    }
-    if (prescreverGrupo) {
-      prescreverGrupo.addEventListener("change", function () {
-        _this7.prescreverGrupo = prescreverGrupo.value;
-        _this7.renderPrescreverCatalog();
-      });
-    }
-    if (prescreverSave) {
-      prescreverSave.addEventListener("click", function () {
-        _this7.savePrescricaoTreino();
-      });
-    }
-    if (prescreverAdd) {
-      prescreverAdd.addEventListener("click", function () {
-        _this7.openAddExerciseModal();
-      });
-    }
-    if (prescreverCatalogClose) {
-      prescreverCatalogClose.addEventListener("click", function () {
-        _this7.closeAddExerciseModal();
-      });
-    }
-    if (prescreverDemandClose) {
-      prescreverDemandClose.addEventListener("click", function () {
-        _this7.closeDemandModal();
-      });
-    }
-  },
-  switchScreen: function switchScreen(screenId) {
-    this.currentScreen = screenId;
-    document.body.setAttribute("data-screen", screenId);
-    xsEachNode(document.querySelectorAll(".nav-item"), function (n) {
-      return n.classList.remove("active");
-    });
-    var nav = document.querySelector(".nav-item[data-screen=\"" + screenId + "\"]");
-    if (nav) nav.classList.add("active");
-    xsEachNode(document.querySelectorAll(".screen"), function (s) {
-      return s.classList.remove("active");
-    });
-    var scr = document.getElementById("screen-" + screenId);
-    if (scr) scr.classList.add("active");
-    if (screenId === "treino") this.loadTreino();else if (screenId === "prescrever") this.loadPrescrever();else if (screenId === "prescricao") this.loadPrescricao();else if (screenId === "historico") this.loadHistorico();else if (screenId === "carga") this.loadCarga();
-  },
-  // ═══════════════════════════════════════════════════════════
-  // TELA 1: EXECUÇÃO
-  // ═══════════════════════════════════════════════════════════
-  loadTreino: function loadTreino() {
-    this.renderTreino();
-  },
-  getTreinoOverrideKey: function getTreinoOverrideKey() {
-    return [
-      this.selectedDate || "SEM_DATA",
-      "W" + this.currentWeek,
-      this.selectedFicha || "SEM_FICHA",
-      this.selectedTreino || "SEM_TREINO"
-    ].join("|");
-  },
-  getTreinoOverrides: function getTreinoOverrides() {
-    var all = this.readCache("xs_treino_overrides", {});
-    var current = all[this.getTreinoOverrideKey()] || {};
-    if (!current.skipped) current.skipped = [];
-    if (!current.extras) current.extras = [];
-    return current;
-  },
-  writeTreinoOverrides: function writeTreinoOverrides(overrides) {
-    var all = this.readCache("xs_treino_overrides", {});
-    all[this.getTreinoOverrideKey()] = {
-      skipped: overrides.skipped || [],
-      extras: overrides.extras || []
-    };
-    this.writeCache("xs_treino_overrides", all);
-  },
-  getCurrentTreinoExercises: function getCurrentTreinoExercises() {
-    var _this8 = this;
-    var overrides = this.getTreinoOverrides();
-    var exs = [];
-    this.prescricaoCache.forEach(function (e) {
-      var matchesFicha = !_this8.selectedFicha || String(e.id_ficha) === String(_this8.selectedFicha);
-      var matchesTreino = !_this8.selectedTreino || String(e.id_treino) === String(_this8.selectedTreino);
-      var id = String(e.id_exercicio || e.nome_exercicio || "");
-      if (matchesFicha && matchesTreino && overrides.skipped.indexOf(id) === -1) {
-        exs.push(e);
+        google.script.run.withSuccessHandler(function (result) {
+          if (!result || result.success === false) reject(new Error(result && result.error || "Falha ao carregar dados."));
+          else resolve(result.data === undefined ? result : result.data);
+        }).withFailureHandler(function (error) {
+          reject(new Error(error && error.message || "Falha de comunicação."));
+        }).routeAction(request);
+      } else {
+        reject(new Error("Abra o aplicativo pela implementação do Apps Script."));
       }
     });
-    exs.sort(function (a, b) {
-      return Number(a.ordem_exercicio || 0) - Number(b.ordem_exercicio || 0);
-    });
-    (overrides.extras || []).forEach(function (extra, index) {
-      extra.ordem_exercicio = exs.length + index + 1;
-      exs.push(extra);
-    });
-    return exs;
   },
-  renderTreino: function renderTreino() {
-    var _this8 = this;
-    var c = document.getElementById("treino-list");
-    var exs = this.getCurrentTreinoExercises();
-    if (!exs || exs.length === 0) {
-      var detail = this.dataWarning ? "<div class=\"empty-subtext\" style=\"margin-top:8px;font-size:11px;opacity:0.8;\">" + this.dataWarning + "</div>" : "";
-      c.innerHTML = '<div class="empty-state"><div class="empty-icon">🏋️</div><div class="empty-text">Nenhum exercício no treino de hoje</div>' + detail + '</div><button class="btn-ghost treino-day-add" onclick="App.openTreinoAddExerciseModal()">+ Adicionar exercício do dia</button><button class="btn-ghost" style="margin-top:8px" onclick="App.openRPEModal()">🎯 Finalizar Sessão — Registrar RPE</button>';
+  refresh: function refresh() {
+    var self = this;
+    this.setSync("Atualizando...");
+    this.call("getTenantBootstrap").then(function (data) {
+      self.bootstrap = data || {};
+      self.activeFicha = self.bootstrap.ficha_ativa || null;
+      self.renderAll();
+      self.setSync("Sincronizado");
+    }).catch(function (error) {
+      self.setSync("Dados locais");
+      self.toast(error.message);
+      self.renderAll();
+    });
+  },
+  renderAll: function renderAll() {
+    this.renderTreinoSetup();
+    this.renderFichas();
+    this.renderHistorico();
+    if (this.currentScreen === "progresso") this.loadProgress(8);
+  },
+  goTo: function goTo(screen) {
+    this.currentScreen = screen;
+    var screens = document.querySelectorAll(".student-screen");
+    var navs = document.querySelectorAll(".nav-item");
+    for (var i = 0; i < screens.length; i++) screens[i].classList.toggle("active", screens[i].id === "screen-" + screen);
+    for (var j = 0; j < navs.length; j++) navs[j].classList.toggle("active", navs[j].getAttribute("data-screen") === screen);
+    document.getElementById("page-title").textContent = screen === "treino" ? "Treino" : screen === "fichas" ? "Fichas" : screen === "historico" ? "Histórico" : "Progresso";
+    if (screen === "progresso") this.loadProgress(8);
+  },
+  renderTreinoSetup: function renderTreinoSetup() {
+    var root = document.getElementById("treino-setup");
+    if (this.currentSession) { root.innerHTML = ""; return; }
+    if (!this.activeFicha) {
+      root.innerHTML = '<div class="empty-state"><strong>Nenhuma ficha ativa</strong><br>Quando seu treinador ativar uma ficha, ela aparecerá aqui.</div>';
       return;
     }
-    var wk = this.currentWeek;
-    var sk = "semana_" + wk + "_sets";
-    var rk = "semana_" + wk + "_reps";
-    var dk = "semana_" + wk + "_descanso";
+    var treinos = this.getTreinosAtivos();
+    var options = treinos.map(function (item) { return '<option value="' + App.escape(item) + '">' + App.escape(item) + "</option>"; }).join("");
+    var last = this.bootstrap && this.bootstrap.historico && this.bootstrap.historico[0];
+    root.innerHTML = '<p class="eyebrow">FICHA ATIVA</p><h2>' + this.escape(this.activeFicha.nome_ficha) + '</h2><p class="muted">Escolha um treino para carregar seus exercícios.</p><label class="field-label">Treino</label><select id="treino-select">' + options + '</select><button class="primary-button" type="button" onclick="App.startTraining()">Iniciar treino</button>' + (last ? '<p class="last-training">Último treino: <strong>' + this.escape(String(last.treino_id || "sessão")) + "</strong></p>" : '<p class="last-training">Ainda não há treino registrado.</p>');
+  },
+  getTreinosAtivos: function getTreinosAtivos() {
+    var provided = this.bootstrap && this.bootstrap.treinos_ativos || [];
+    if (provided.length) return provided;    var history = this.bootstrap && this.bootstrap.historico || [];
+    var known = [];
+    for (var i = 0; i < history.length; i++) if (history[i].ficha_id === this.activeFicha.ficha_id && known.indexOf(history[i].treino_id) === -1) known.push(history[i].treino_id);
+    return known.length ? known : ["A"];
+  },
+  startTraining: function startTraining() {
+    var self = this;
+    var select = document.getElementById("treino-select");
+    if (!select || !select.value) return this.toast("Selecione um treino.");
+    this.setSync("Carregando treino...");
+    this.call("getTreinoSession", { treino_id: select.value, ciclo: "1" }).then(function (data) {
+      self.currentSession = {
+        id_sessao: "sess_" + Date.now(),
+        id_operacao: "op_" + Date.now() + "_" + Math.floor(Math.random() * 100000),
+        ficha_id: data.ficha.ficha_id,
+        treino_id: data.treino_id,
+        data_treino: new Date().toISOString(),
+        catalogo: data.catalogo || [],
+        exercicios: self.hydrateExercises(data.exercicios || []),
+        pse: ""
+      };
+      self.saveSessionDraft();
+      self.renderSession();
+      self.setSync("Rascunho salvo neste aparelho");
+    }).catch(function (error) { self.setSync("Sincronizado"); self.toast(error.message); });
+  },
+  hydrateExercises: function hydrateExercises(items) {
+    return items.map(function (item) {
+      var series = [];
+      var count = Number(item.sets || 1);
+      for (var i = 0; i < count; i++) series.push({ carga_absoluta: "", reps_executadas: "", rir: "-" });
+      item.series = series;
+      item.tipo_execucao = "prescrito";
+      item.exercicio_prescrito_id = item.exercicio_id;
+      item.estado_execucao = "realizado";
+      return item;
+    });
+  },
+  renderSession: function renderSession() {
+    var area = document.getElementById("session-area");
+    if (!this.currentSession) { area.innerHTML = ""; return; }
+    var cards = "";
+    for (var i = 0; i < this.currentSession.exercicios.length; i++) cards += this.exerciseCard(this.currentSession.exercicios[i], i);
+    area.innerHTML = '<div class="session-header"><p class="eyebrow">EM ANDAMENTO</p><h2>' + this.escape(this.currentSession.treino_id) + '</h2><button type="button" class="link-button" onclick="App.openPreviousModal()">Mostrar treino anterior</button></div><div id="exercise-cards">' + cards + '</div><button class="secondary-button" type="button" onclick="App.addExtraExercise()">+ Adicionar exercício extra</button><button class="primary-button" type="button" onclick="App.finishTraining()">Finalizar treino</button>';
+  },
+  exerciseCard: function exerciseCard(item, index) {
+    if (item.estado_execucao === "nao_realizado") return '<div class="omitted-card"><strong>' + this.escape(item.nome_exercicio) + '</strong><span>Não realizado nesta sessão</span><button type="button" onclick="App.undoRemove(' + index + ')">Desfazer</button></div>';
+    var tags = item.tipo_execucao === "substituto" ? '<span class="tag">Substituto</span>' : item.tipo_execucao === "extra" ? '<span class="tag">Extra</span>' : "";
+    var series = "";
+    for (var i = 0; i < item.series.length; i++) {
+      var row = item.series[i];
+      series += '<div class="series-row"><span>S' + (i + 1) + '</span><input inputmode="decimal" placeholder="Carga" value="' + this.escape(row.carga_absoluta) + '" onchange="App.updateSeries(' + index + ',' + i + ',0,this.value)"><input inputmode="numeric" placeholder="Reps" value="' + this.escape(row.reps_executadas) + '" onchange="App.updateSeries(' + index + ',' + i + ',1,this.value)"><select onchange="App.updateSeries(' + index + ',' + i + ',2,this.value)">' + this.rirOptions(row.rir) + "</select></div>";
+    }
+    return '<article class="exercise-card"><div class="exercise-title"><div><h3>' + this.escape(item.nome_exercicio) + '</h3>' + tags + '<p>' + this.escape(String(item.sets || "") + " × " + String(item.reps || "")) + ' · RIR alvo: ' + this.escape(item.zona_rir || "-") + '</p></div><button class="icon-button" type="button" onclick="App.openSubstituteModal(' + index + ')" aria-label="Substitutos">⇄</button></div><div class="series-head"><span>Série</span><span>Carga</span><span>Reps</span><span>RIR</span></div>' + series + '<div class="card-actions"><button type="button" onclick="App.removeFromSession(' + index + ')">Remover da sessão</button><button type="button" onclick="App.openPreviousModal(' + index + ')">Referência</button></div></article>';
+  },
+  rirOptions: function rirOptions(selected) {
     var html = "";
-    exs.forEach(function (ex, i) {
-      if (!_this8.exerciseSets[ex.id_exercicio]) {
-        _this8.exerciseSets[ex.id_exercicio] = parseInt(ex[sk]) || 1;
-      }
-      var numSets = _this8.exerciseSets[ex.id_exercicio];
-      var setsHtml = "";
-      var allSaved = true;
-      for (var s = 1; s <= numSets; s++) {
-        var sid = _this8.genSessionId(ex, s);
-        var saved = _this8.getSaved(sid);
-        if (!saved) allSaved = false;
-        setsHtml += "\n          <div class=\"set-row\" style=\"display:flex; gap:8px; align-items:center; margin-bottom:8px;\">\n            <div style=\"width:20px; font-size:10px; color:var(--text-muted); font-weight:700;\">#" + s + "</div>\n            <div class=\"input-group\" style=\"flex:1;\">\n              <input type=\"number\" inputmode=\"decimal\" placeholder=\"Carga\" id=\"carga-" + i + "-" + s + "\" value=\"" + (saved ? saved.carga_absoluta : "") + "\" />\n            </div>\n            <div class=\"input-group\" style=\"flex:1;\">\n              <input type=\"number\" inputmode=\"numeric\" placeholder=\"Reps\" id=\"reps-" + i + "-" + s + "\" value=\"" + (saved ? saved.reps_executadas : "") + "\" />\n            </div>\n            <div class=\"input-group\" style=\"flex:1;\">\n              <input type=\"number\" inputmode=\"numeric\" placeholder=\"RIR\" id=\"rir-" + i + "-" + s + "\" value=\"" + (saved ? saved.rir : "") + "\" />\n            </div>\n          </div>\n        ";
-      }
-      var idJs = xsEscapeJsString(ex.id_exercicio);
-      var obs = ex.observacoes ? "<div class=\"ex-obs\">" + xsEscapeHtml(ex.observacoes) + "</div>" : "";
-      html += "<div class=\"exercise-card " + (allSaved ? "completed" : "") + "\" id=\"ex-" + i + "\">\n        <div class=\"ex-header\">\n          <button class=\"ex-title-toggle\" onclick=\"App.toggleCollapse('ex-body-" + i + "', 'col-icon-" + i + "')\">\n            <span class=\"ex-order\">#" + ex.ordem_exercicio + "</span>\n            <span class=\"ex-name\">" + xsEscapeHtml(ex.nome_exercicio) + "</span>\n            " + obs + "\n          </button>\n          <div class=\"treino-card-actions\">\n            <button class=\"btn-icon danger\" title=\"Excluir do treino de hoje\" onclick=\"App.skipTreinoExercise(" + i + ")\">×</button>\n            <button class=\"btn-icon\" title=\"Abrir periodização\" onclick=\"App.toggleCollapse('ex-body-" + i + "', 'col-icon-" + i + "')\"><span class=\"collapse-icon\" id=\"col-icon-" + i + "\" style=\"transform: rotate(180deg);\">\u25BC</span></button>\n          </div>\n        </div>\n        <div class=\"ex-meta\" style=\"margin-bottom:16px;\">\n          <div class=\"meta-item\"><div class=\"meta-label\">S\xE9ries</div><div class=\"meta-value\">" + xsEscapeHtml(ex[sk] || "-") + "</div></div>\n          <div class=\"meta-item\"><div class=\"meta-label\">Reps</div><div class=\"meta-value\">" + xsEscapeHtml(ex[rk] || "-") + "</div></div>\n          <div class=\"meta-item\"><div class=\"meta-label\">Descanso</div><div class=\"meta-value\">" + xsEscapeHtml(ex[dk] || "-") + "</div></div>\n        </div>\n        <div id=\"ex-body-" + i + "\" class=\"ex-body-wrapper collapsed\">\n          <div class=\"ex-body-inner\">\n            <div class=\"sets-container\" style=\"margin-bottom:8px;\">\n              " + setsHtml + "\n            </div>\n            <div style=\"display:flex; gap:12px; margin-bottom:16px; justify-content:flex-end;\">\n              <button class=\"btn-ghost\" style=\"padding:8px; width:48px;\" onclick=\"App.removeSet('" + idJs + "')\">\uD83D\uDDD1\uFE0F</button>\n              <button class=\"btn-ghost\" style=\"padding:8px; width:48px; border-color:var(--neon); color:var(--neon);\" onclick=\"App.addSet('" + idJs + "')\">\u2795</button>\n            </div>\n            <button class=\"btn-neon\" onclick=\"App.saveExecution(" + i + ",'" + idJs + "')\">\u26A1 Registrar S\xE9rie(s)</button>\n          </div>\n        </div>\n      </div>";
-    });
-    html += "<button class=\"btn-ghost treino-day-add\" onclick=\"App.openTreinoAddExerciseModal()\">+ Adicionar exercício do dia</button>";
-    html += "<button class=\"btn-ghost\" style=\"margin-top:8px\" onclick=\"App.openRPEModal()\">\uD83C\uDFAF Finalizar Sess\xE3o \u2014 Registrar RPE</button>";
-    c.innerHTML = html;
-  },
-  skipTreinoExercise: function skipTreinoExercise(index) {
-    var exs = this.getCurrentTreinoExercises();
-    var ex = exs[index];
-    if (!ex) return;
-    var id = String(ex.id_exercicio || ex.nome_exercicio || "");
-    var overrides = this.getTreinoOverrides();
-    if (ex.extra_dia) {
-      var nextExtras = [];
-      (overrides.extras || []).forEach(function (extra) {
-        if (String(extra.id_exercicio || extra.nome_exercicio || "") !== id) nextExtras.push(extra);
-      });
-      overrides.extras = nextExtras;
-    } else if (overrides.skipped.indexOf(id) === -1) {
-      overrides.skipped.push(id);
-    }
-    this.removePendingForTreinoExerciseDay(id);
-    this.writeTreinoOverrides(overrides);
-    this.showToast("Exercício removido do treino de hoje", "warning");
-    this.renderTreino();
-  },
-  removePendingForTreinoExerciseDay: function removePendingForTreinoExerciseDay(idEx) {
-    var pending = this.readCache("xs_pending", []);
-    var prefix = (this.selectedFicha || "SEM_FICHA") + "_" + (this.selectedTreino || "SEM_TREINO") + "_" + idEx + "_W" + this.currentWeek + "_" + this.selectedDate + "_S";
-    var next = [];
-    pending.forEach(function (row) {
-      var sid = String(row.id_sessao || "");
-      if (row.sync_status === "pending" && sid.indexOf(prefix) === 0) return;
-      next.push(row);
-    });
-    this.writeCache("xs_pending", next);
-    this.pendingSync = next;
-    this.updateSyncBadge();
-  },
-  applyCatalogPayload: function applyCatalogPayload(data) {
-    data = data || {};
-    var catalogo = data.catalogo || {};
-    this.catalogoCache = catalogo.rows || [];
-    this.catalogoMeta = {
-      grupos: catalogo.grupos || [],
-      tipos: catalogo.tipos || [],
-      musculos: catalogo.musculos || []
-    };
-  },
-  openTreinoAddExerciseModal: function openTreinoAddExerciseModal() {
-    var _this9 = this;
-    var openModal = function openModal() {
-      _this9.catalogMode = "treino";
-      _this9.catalogTargetIndex = null;
-      _this9.setCatalogModalTitle("Adicionar exercício ao treino de hoje");
-      _this9.renderPrescreverControls();
-      _this9.renderPrescreverCatalog();
-      var modal = document.getElementById("prescrever-catalog-modal");
-      var search = document.getElementById("prescrever-search");
-      if (modal) modal.classList.add("show");
-      if (search) search.focus();
-    };
-    if (this.catalogoCache && this.catalogoCache.length > 0) {
-      openModal();
-      return;
-    }
-    this.callServer("getPrescriptionEditorData", "clientGetPrescriptionEditorData").then(function (data) {
-      _this9.applyCatalogPayload(data);
-      openModal();
-    }).catch(function (err) {
-      _this9.showToast(err.message || "Falha ao carregar catálogo", "error");
-    });
-  },
-  addTreinoExtraExerciseFromCatalog: function addTreinoExtraExerciseFromCatalog(ex) {
-    var nome = ex.nome || ex.id_exercicio || "";
-    if (!nome) return;
-    var current = this.getCurrentTreinoExercises();
-    for (var i = 0; i < current.length; i++) {
-      if (String(current[i].id_exercicio || current[i].nome_exercicio || "") === String(nome)) {
-        this.showToast("Exercício já está no treino de hoje", "warning");
-        return;
-      }
-    }
-    var overrides = this.getTreinoOverrides();
-    var nextExercise = {
-      id_ficha: this.selectedFicha,
-      id_treino: this.selectedTreino,
-      id_exercicio: nome,
-      nome_exercicio: nome,
-      observacoes: "Extra do dia",
-      ordem_exercicio: current.length + 1,
-      extra_dia: true,
-      semana_1_sets: "",
-      semana_1_reps: "",
-      semana_1_descanso: "",
-      semana_2_sets: "",
-      semana_2_reps: "",
-      semana_2_descanso: "",
-      semana_3_sets: "",
-      semana_3_reps: "",
-      semana_3_descanso: "",
-      semana_4_sets: "",
-      semana_4_reps: "",
-      semana_4_descanso: ""
-    };
-    nextExercise["semana_" + this.currentWeek + "_sets"] = "1";
-    overrides.extras.push(nextExercise);
-    this.writeTreinoOverrides(overrides);
-    this.exerciseSets[nome] = this.exerciseSets[nome] || 1;
-    this.showToast("Exercício adicionado ao treino de hoje", "success");
-    this.renderTreino();
-  },
-  saveExecution: function saveExecution(idx, idEx) {
-    var _this9 = this;
-    var numSets = this.exerciseSets[idEx];
-    var savedCount = 0;
-    for (var s = 1; s <= numSets; s++) {
-      var carga = parseFloat(document.getElementById("carga-" + idx + "-" + s).value) || 0;
-      var reps = parseInt(document.getElementById("reps-" + idx + "-" + s).value) || 0;
-      var rir = parseInt(document.getElementById("rir-" + idx + "-" + s).value) || 0;
-      if (carga > 0 || reps > 0) {
-        var dateParts = this.selectedDate.split("-");
-        var formattedDate = dateParts[2] + "/" + dateParts[1] + "/" + dateParts[0];
-        var rec = {
-          id_sessao: this.genSessionId({
-            id_ficha: this.selectedFicha,
-            id_treino: this.selectedTreino,
-            id_exercicio: idEx
-          }, s),
-          data_treino: formattedDate,
-          id_exercicio: idEx,
-          semana_referencia: this.currentWeek,
-          carga_absoluta: carga,
-          reps_executadas: reps,
-          rir: rir,
-          rpe_sessao: 0,
-          sync_status: "pending"
-        };
-        this.saveToLocal(rec);
-        savedCount++;
-      }
-    }
-    if (savedCount > 0) {
-      this.showToast(savedCount + " s\xE9rie(s) salva(s) localmente \u26A1", "success");
-      this.renderTreino();
-      if (navigator.onLine) setTimeout(function () {
-        return _this9.syncToServer();
-      }, 1500);
-    } else {
-      this.showToast("Preencha carga ou reps", "error");
-    }
-  },
-  openRPEModal: function openRPEModal() {
-    document.getElementById("rpe-modal").classList.add("show");
-    document.getElementById("rpe-big-value").textContent = "5";
-    document.getElementById("rpe-slider-input").value = 5;
-  },
-  updateRPEDisplay: function updateRPEDisplay(val) {
-    document.getElementById("rpe-big-value").textContent = val;
-  },
-  confirmSessionRPE: function confirmSessionRPE() {
-    var _this10 = this;
-    var rpe = parseFloat(document.getElementById("rpe-slider-input").value);
-    var pending = this.readCache("xs_pending", []);
-    var dateParts = this.selectedDate.split("-");
-    var formattedDate = dateParts[2] + "/" + dateParts[1] + "/" + dateParts[0];
-    pending.forEach(function (r) {
-      if (r.data_treino === formattedDate && r.rpe_sessao === 0) {
-        r.rpe_sessao = rpe;
-        r.sync_status = "pending";
-      }
-    });
-    this.writeCache("xs_pending", pending);
-    this.pendingSync = pending;
-    document.getElementById("rpe-modal").classList.remove("show");
-    this.showToast("RPE " + rpe + " registrado para a sess\xE3o", "success");
-    if (navigator.onLine) setTimeout(function () {
-      return _this10.syncToServer();
-    }, 1000);
-  },
-  genSessionId: function genSessionId(ex, setNum) {
-    var ficha = ex.id_ficha || "SEM_FICHA";
-    var treino = ex.id_treino || "SEM_TREINO";
-    return ficha + "_" + treino + "_" + ex.id_exercicio + "_W" + this.currentWeek + "_" + this.selectedDate + "_S" + setNum;
-  },
-  toggleCollapse: function toggleCollapse(bodyId, iconId) {
-    var body = document.getElementById(bodyId);
-    var icon = document.getElementById(iconId);
-    if (body.classList.contains("collapsed")) {
-      body.classList.remove("collapsed");
-      icon.style.transform = "rotate(0deg)";
-    } else {
-      body.classList.add("collapsed");
-      icon.style.transform = "rotate(180deg)";
-    }
-  },
-  addSet: function addSet(idEx) {
-    this.exerciseSets[idEx] = (this.exerciseSets[idEx] || 1) + 1;
-    this.renderTreino();
-  },
-  removeSet: function removeSet(idEx) {
-    if (this.exerciseSets[idEx] > 1) {
-      this.exerciseSets[idEx]--;
-      this.renderTreino();
-    }
-  },
-  populateFilters: function populateFilters() {
-    var fichasArr = [];
-    this.prescricaoCache.forEach(function (r) {
-      xsUniquePush(fichasArr, r.id_ficha);
-    });
-    if (!this.selectedFicha && fichasArr.length > 0) this.selectedFicha = fichasArr[0];
-    var fSel = document.getElementById("ficha-filter");
-    if (fSel) {
-      fSel.innerHTML = fichasArr.map(function (f) {
-        return "<option value=\"" + f + "\">" + f + "</option>";
-      }).join("");
-      if (this.selectedFicha) fSel.value = this.selectedFicha;
-    }
-    var fSelP = document.getElementById("ficha-filter-prescricao");
-    if (fSelP) {
-      fSelP.innerHTML = fichasArr.map(function (f) {
-        return "<option value=\"" + f + "\">" + f + "</option>";
-      }).join("");
-      if (this.selectedFicha) fSelP.value = this.selectedFicha;
-    }
-    this.updateTreinoFilterOptions();
-  },
-  updateTreinoFilterOptions: function updateTreinoFilterOptions() {
-    var _this11 = this;
-    var treinosArr = [];
-    this.prescricaoCache.forEach(function (r) {
-      if (String(r.id_ficha) === String(_this11.selectedFicha) && r.id_treino) {
-        xsUniquePush(treinosArr, r.id_treino);
-      }
-    });
-    if (treinosArr.indexOf(this.selectedTreino) === -1 && treinosArr.length > 0) {
-      this.selectedTreino = treinosArr[0];
-    }
-    var tSel = document.getElementById("treino-filter");
-    if (tSel) {
-      tSel.innerHTML = treinosArr.map(function (t) {
-        return "<option value=\"" + t + "\">" + t + "</option>";
-      }).join("");
-      if (this.selectedTreino) tSel.value = this.selectedTreino;
-    }
-  },
-  filterFicha: function filterFicha() {
-    var fichaFilter = document.getElementById("ficha-filter");
-    var fichaPrescricao = document.getElementById("ficha-filter-prescricao");
-    var val1 = fichaFilter ? fichaFilter.value : "";
-    var val2 = fichaPrescricao ? fichaPrescricao.value : "";
-    this.selectedFicha = this.currentScreen === "treino" ? val1 : val2;
-    if (this.currentScreen === "treino") document.getElementById("ficha-filter-prescricao").value = this.selectedFicha;else document.getElementById("ficha-filter").value = this.selectedFicha;
-    this.updateTreinoFilterOptions();
-    if (this.currentScreen === "treino") this.renderTreino();else if (this.currentScreen === "prescricao") this.renderPrescricao();
-  },
-  filterTreino: function filterTreino() {
-    this.selectedTreino = document.getElementById("treino-filter").value;
-    this.renderTreino();
-  },
-  updateTreinoDate: function updateTreinoDate() {
-    this.selectedDate = document.getElementById("treino-date").value;
-    this.renderTreino();
-  },
-  // ═══════════════════════════════════════════════════════════
-  // TELA 2: PRESCREVER
-  // ═══════════════════════════════════════════════════════════
-  loadPrescrever: function loadPrescrever() {
-    var _this12 = this;
-    if (this.editorDataLoaded) {
-      this.renderPrescrever();
-      return;
-    }
-    this.callServer("getPrescriptionEditorData", "clientGetPrescriptionEditorData").then(function (data) {
-      _this12.applyPrescriptionEditorData(data);
-      _this12.renderPrescrever();
-    }).catch(function (err) {
-      _this12.showToast("Falha ao carregar editor de prescrição", "error");
-      console.error("[XSTeam prescrever]", err);
-      _this12.renderPrescrever();
-    });
-  },
-  applyPrescriptionEditorData: function applyPrescriptionEditorData(data) {
-    data = data || {};
-    var catalogo = data.catalogo || {};
-    var prescricao = data.prescricao || {};
-    this.catalogoCache = catalogo.rows || [];
-    this.catalogoMeta = {
-      grupos: catalogo.grupos || [],
-      tipos: catalogo.tipos || [],
-      musculos: catalogo.musculos || []
-    };
-    if (prescricao.rows) {
-      this.prescricaoCache = prescricao.rows;
-      this.writeCache("xs_prescricao", this.prescricaoCache);
-      this.populateFilters();
-    }
-    this.editorDataLoaded = true;
-    this.initializePrescreverDraft();
-  },
-  initializePrescreverDraft: function initializePrescreverDraft() {
-    var fichaInput = document.getElementById("prescrever-ficha");
-    var treinoInput = document.getElementById("prescrever-treino");
-    var ficha = fichaInput && fichaInput.value ? fichaInput.value : this.selectedFicha;
-    var treino = treinoInput && treinoInput.value ? treinoInput.value : this.selectedTreino;
-    var fichas = this.getPrescricaoFichas();
-    if (!ficha && fichas.length > 0) ficha = fichas[0];
-    var treinos = this.getTreinosForFicha(ficha);
-    if (!treino && treinos.length > 0) treino = treinos[0];
-    this.selectedFicha = ficha || "";
-    this.selectedTreino = treino || "";
-    this.prescreverDraft = {
-      id_ficha: this.selectedFicha,
-      id_treino: this.selectedTreino,
-      exercicios: this.clonePrescricaoRows(this.selectedFicha, this.selectedTreino)
-    };
-  },
-  getPrescricaoFichas: function getPrescricaoFichas() {
-    var fichas = [];
-    this.prescricaoCache.forEach(function (row) {
-      xsUniquePush(fichas, row.id_ficha);
-    });
-    return fichas.sort();
-  },
-  getTreinosForFicha: function getTreinosForFicha(ficha) {
-    var treinos = [];
-    this.prescricaoCache.forEach(function (row) {
-      if (String(row.id_ficha) === String(ficha)) xsUniquePush(treinos, row.id_treino);
-    });
-    return treinos.sort();
-  },
-  clonePrescricaoRows: function clonePrescricaoRows(ficha, treino) {
-    var rows = [];
-    this.prescricaoCache.forEach(function (row) {
-      if (String(row.id_ficha) === String(ficha) && String(row.id_treino) === String(treino)) {
-        rows.push({
-          id_exercicio: row.id_exercicio || row.nome_exercicio,
-          nome_exercicio: row.nome_exercicio || row.id_exercicio,
-          observacoes: row.observacoes || "",
-          ordem_exercicio: row.ordem_exercicio || rows.length + 1,
-          semana_1_sets: row.semana_1_sets || "",
-          semana_1_reps: row.semana_1_reps || "",
-          semana_1_descanso: row.semana_1_descanso || "",
-          semana_2_sets: row.semana_2_sets || "",
-          semana_2_reps: row.semana_2_reps || "",
-          semana_2_descanso: row.semana_2_descanso || "",
-          semana_3_sets: row.semana_3_sets || "",
-          semana_3_reps: row.semana_3_reps || "",
-          semana_3_descanso: row.semana_3_descanso || "",
-          semana_4_sets: row.semana_4_sets || "",
-          semana_4_reps: row.semana_4_reps || "",
-          semana_4_descanso: row.semana_4_descanso || ""
-        });
-      }
-    });
-    rows.sort(function (a, b) {
-      return Number(a.ordem_exercicio) - Number(b.ordem_exercicio);
-    });
-    return rows;
-  },
-  updatePrescreverIdentity: function updatePrescreverIdentity() {
-    this.collectPrescreverDraftFromDom();
-    var fichaInput = document.getElementById("prescrever-ficha");
-    var treinoInput = document.getElementById("prescrever-treino");
-    this.selectedFicha = fichaInput ? fichaInput.value : "";
-    this.selectedTreino = treinoInput ? treinoInput.value : "";
-    this.prescreverDraft = {
-      id_ficha: this.selectedFicha,
-      id_treino: this.selectedTreino,
-      exercicios: this.clonePrescricaoRows(this.selectedFicha, this.selectedTreino)
-    };
-    this.renderPrescrever();
-  },
-  renderPrescrever: function renderPrescrever() {
-    if (!this.prescreverDraft) this.initializePrescreverDraft();
-    this.renderPrescreverControls();
-    this.renderPrescreverDemandSummary();
-    this.renderPrescreverEditorList();
-    this.renderPrescreverCatalog();
-  },
-  renderPrescreverControls: function renderPrescreverControls() {
-    var draft = this.prescreverDraft || { id_ficha: "", id_treino: "", exercicios: [] };
-    var fichaInput = document.getElementById("prescrever-ficha");
-    var treinoInput = document.getElementById("prescrever-treino");
-    var fichasList = document.getElementById("prescrever-fichas-list");
-    var treinosList = document.getElementById("prescrever-treinos-list");
-    var grupoSel = document.getElementById("prescrever-grupo");
-    if (fichaInput) fichaInput.value = draft.id_ficha || "";
-    if (treinoInput) treinoInput.value = draft.id_treino || "";
-    if (fichasList) {
-      fichasList.innerHTML = this.getPrescricaoFichas().map(function (f) {
-        return '<option value="' + xsEscapeHtml(f) + '"></option>';
-      }).join("");
-    }
-    if (treinosList) {
-      treinosList.innerHTML = this.getTreinosForFicha(draft.id_ficha).map(function (t) {
-        return '<option value="' + xsEscapeHtml(t) + '"></option>';
-      }).join("");
-    }
-    if (grupoSel) grupoSel.innerHTML = xsSelectOptions((this.catalogoMeta || {}).grupos || [], this.prescreverGrupo, true);
-  },
-  renderPrescreverEditorList: function renderPrescreverEditorList() {
-    var list = document.getElementById("prescrever-editor-list");
-    var draft = this.prescreverDraft || { exercicios: [] };
-    if (!list) return;
-    if (!draft.id_ficha || !draft.id_treino) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">✍️</div><div class="empty-text">Informe ficha e treino para começar</div></div>';
-      return;
-    }
-    if (!draft.exercicios || draft.exercicios.length === 0) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">➕</div><div class="empty-text">Adicione exercícios do catálogo</div></div>';
-      return;
-    }
-    var html = "";
-    var cycleLabels = this.cycleLabels;
-    draft.exercicios.forEach(function (ex, i) {
-      html += '<div class="prescrever-card">';
-      html += '<div class="prescrever-card-head"><div><span class="ex-order">#' + (i + 1) + '</span><button class="exercise-select ex-name" onclick="App.openExerciseSelectModal(' + i + ')">' + xsEscapeHtml(ex.nome_exercicio || ex.id_exercicio) + '</button></div>';
-      html += '<div class="prescrever-card-actions"><button class="btn-icon" onclick="App.movePrescreverExercise(' + i + ', -1)">↑</button><button class="btn-icon" onclick="App.movePrescreverExercise(' + i + ', 1)">↓</button><button class="btn-icon danger" onclick="App.removePrescreverExercise(' + i + ')">×</button></div></div>';
-      html += '<div class="input-group"><label>Observações</label><input id="presc-ex-' + i + '-obs" value="' + xsEscapeHtml(ex.observacoes || "") + '" /></div>';
-      html += '<div class="cycle-grid"><div></div><div>Sets</div><div>Reps</div><div>Descanso</div>';
-      for (var week = 1; week <= 4; week++) {
-        html += '<div class="cycle-label">' + cycleLabels[week - 1] + '</div>';
-        html += '<input id="presc-ex-' + i + '-w' + week + '-sets" value="' + xsEscapeHtml(ex["semana_" + week + "_sets"] || "") + '" inputmode="numeric" />';
-        html += '<input id="presc-ex-' + i + '-w' + week + '-reps" value="' + xsEscapeHtml(ex["semana_" + week + "_reps"] || "") + '" />';
-        html += '<input id="presc-ex-' + i + '-w' + week + '-descanso" value="' + xsEscapeHtml(ex["semana_" + week + "_descanso"] || "") + '" inputmode="numeric" />';
-      }
-      html += "</div></div>";
-    });
-    list.innerHTML = html;
-  },
-  renderPrescreverCatalog: function renderPrescreverCatalog() {
-    var list = document.getElementById("prescrever-catalog-list");
-    if (!list) return;
-    var search = String(this.prescreverSearch || "").toLowerCase();
-    var grupo = this.prescreverGrupo || "";
-    var html = "";
-    var count = 0;
-    this.catalogoCache.forEach(function (ex, index) {
-      var nome = ex.nome || ex.id_exercicio || "";
-      var okSearch = !search || nome.toLowerCase().indexOf(search) !== -1;
-      var okGrupo = !grupo || String(ex.grupo_principal) === String(grupo);
-      if (okSearch && okGrupo && count < 40) {
-        count++;
-        html += '<div class="catalog-row"><div><div class="catalog-name">' + xsEscapeHtml(nome) + '</div><div class="catalog-meta">' + xsEscapeHtml(ex.grupo_principal || "") + (ex.tipo ? " · " + xsEscapeHtml(ex.tipo) : "") + '</div></div><button class="btn-ghost catalog-add" onclick="App.addCatalogExercise(' + index + ')">' + (App.catalogTargetIndex === null ? "Adicionar" : "Selecionar") + '</button></div>';
-      }
-    });
-    if (!html) html = '<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">Nenhum exercício encontrado</div></div>';
-    list.innerHTML = html;
-  },
-  openAddExerciseModal: function openAddExerciseModal() {
-    this.collectPrescreverDraftFromDom();
-    this.catalogMode = "prescrever";
-    this.catalogTargetIndex = null;
-    this.setCatalogModalTitle("Adicionar exercício");
-    this.renderPrescreverControls();
-    this.renderPrescreverCatalog();
-    var modal = document.getElementById("prescrever-catalog-modal");
-    var search = document.getElementById("prescrever-search");
-    if (modal) modal.classList.add("show");
-    if (search) search.focus();
-  },
-  openExerciseSelectModal: function openExerciseSelectModal(index) {
-    this.collectPrescreverDraftFromDom();
-    this.catalogMode = "prescrever";
-    this.catalogTargetIndex = index;
-    this.setCatalogModalTitle("Trocar exercício");
-    this.renderPrescreverControls();
-    this.renderPrescreverCatalog();
-    var modal = document.getElementById("prescrever-catalog-modal");
-    if (modal) modal.classList.add("show");
-  },
-  setCatalogModalTitle: function setCatalogModalTitle(title) {
-    var titleEl = document.getElementById("prescrever-catalog-title");
-    if (titleEl) titleEl.textContent = title;
-  },
-  closeAddExerciseModal: function closeAddExerciseModal() {
-    var modal = document.getElementById("prescrever-catalog-modal");
-    if (modal) modal.classList.remove("show");
-  },
-  addCatalogExercise: function addCatalogExercise(index) {
-    var ex = this.catalogoCache[index];
-    if (!ex) return;
-    if (this.catalogMode === "treino") {
-      this.addTreinoExtraExerciseFromCatalog(ex);
-      this.closeAddExerciseModal();
-      return;
-    }
-    this.collectPrescreverDraftFromDom();
-    if (!this.prescreverDraft) this.initializePrescreverDraft();
-    var nextExercise = {
-      id_exercicio: ex.nome,
-      nome_exercicio: ex.nome,
-      observacoes: "",
-      semana_1_sets: "",
-      semana_1_reps: "",
-      semana_1_descanso: "",
-      semana_2_sets: "",
-      semana_2_reps: "",
-      semana_2_descanso: "",
-      semana_3_sets: "",
-      semana_3_reps: "",
-      semana_3_descanso: "",
-      semana_4_sets: "",
-      semana_4_reps: "",
-      semana_4_descanso: ""
-    };
-    if (
-      this.catalogTargetIndex !== null &&
-      this.prescreverDraft.exercicios[this.catalogTargetIndex]
-    ) {
-      var current = this.prescreverDraft.exercicios[this.catalogTargetIndex];
-      nextExercise.observacoes = current.observacoes || "";
-      for (var week = 1; week <= 4; week++) {
-        nextExercise["semana_" + week + "_sets"] = current["semana_" + week + "_sets"] || "";
-        nextExercise["semana_" + week + "_reps"] = current["semana_" + week + "_reps"] || "";
-        nextExercise["semana_" + week + "_descanso"] = current["semana_" + week + "_descanso"] || "";
-      }
-      this.prescreverDraft.exercicios[this.catalogTargetIndex] = nextExercise;
-    } else {
-      this.prescreverDraft.exercicios.push(nextExercise);
-    }
-    this.renderPrescrever();
-    this.closeAddExerciseModal();
-  },
-  removePrescreverExercise: function removePrescreverExercise(index) {
-    this.collectPrescreverDraftFromDom();
-    if (!this.prescreverDraft || !this.prescreverDraft.exercicios) return;
-    this.prescreverDraft.exercicios.splice(index, 1);
-    this.renderPrescrever();
-  },
-  movePrescreverExercise: function movePrescreverExercise(index, direction) {
-    this.collectPrescreverDraftFromDom();
-    var list = this.prescreverDraft ? this.prescreverDraft.exercicios : [];
-    var nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= list.length) return;
-    var item = list[index];
-    list[index] = list[nextIndex];
-    list[nextIndex] = item;
-    this.renderPrescrever();
-  },
-  collectPrescreverDraftFromDom: function collectPrescreverDraftFromDom() {
-    if (!this.prescreverDraft || !this.prescreverDraft.exercicios) return;
-    var fichaInput = document.getElementById("prescrever-ficha");
-    var treinoInput = document.getElementById("prescrever-treino");
-    this.prescreverDraft.id_ficha = fichaInput ? fichaInput.value : this.prescreverDraft.id_ficha;
-    this.prescreverDraft.id_treino = treinoInput ? treinoInput.value : this.prescreverDraft.id_treino;
-    for (var i = 0; i < this.prescreverDraft.exercicios.length; i++) {
-      var obs = document.getElementById("presc-ex-" + i + "-obs");
-      if (obs) this.prescreverDraft.exercicios[i].observacoes = obs.value;
-      for (var week = 1; week <= 4; week++) {
-        var sets = document.getElementById("presc-ex-" + i + "-w" + week + "-sets");
-        var reps = document.getElementById("presc-ex-" + i + "-w" + week + "-reps");
-        var descanso = document.getElementById("presc-ex-" + i + "-w" + week + "-descanso");
-        if (sets) this.prescreverDraft.exercicios[i]["semana_" + week + "_sets"] = sets.value;
-        if (reps) this.prescreverDraft.exercicios[i]["semana_" + week + "_reps"] = reps.value;
-        if (descanso) this.prescreverDraft.exercicios[i]["semana_" + week + "_descanso"] = descanso.value;
-      }
-    }
-  },
-  getCatalogMap: function getCatalogMap() {
-    var map = {};
-    this.catalogoCache.forEach(function (ex) {
-      map[String(ex.nome || ex.id_exercicio || "").toLowerCase()] = ex;
-    });
-    return map;
-  },
-  calculateDemandSummary: function calculateDemandSummary(rows) {
-    var result = {};
-    var musculos = (this.catalogoMeta || {}).musculos || [];
-    var catalogMap = this.getCatalogMap();
-    for (var m = 0; m < musculos.length; m++) result[musculos[m]] = 0;
-    rows.forEach(function (row) {
-      var name = String(row.id_exercicio || row.nome_exercicio || "").toLowerCase();
-      var catalog = catalogMap[name];
-      if (!catalog || !catalog.demandas) return;
-      var sets = parseFloat(row["semana_" + App.currentWeek + "_sets"]) || 0;
-      musculos.forEach(function (musculo) {
-        result[musculo] += (parseFloat(catalog.demandas[musculo]) || 0) * sets;
-      });
-    });
-    return result;
-  },
-  getDemandRowsForScope: function getDemandRowsForScope(scope) {
-    var draft = this.prescreverDraft || { exercicios: [] };
-    var rows = [];
-    if (scope === "ficha") {
-      this.prescricaoCache.forEach(function (row) {
-        if (String(row.id_ficha) === String(draft.id_ficha) && String(row.id_treino) !== String(draft.id_treino)) {
-          rows.push(row);
-        }
-      });
-    }
-    (draft.exercicios || []).forEach(function (row) {
-      var copy = {};
-      Object.keys(row).forEach(function (key) {
-        copy[key] = row[key];
-      });
-      copy.id_ficha = draft.id_ficha;
-      copy.id_treino = draft.id_treino;
-      rows.push(copy);
-    });
-    return rows;
-  },
-  calculateDemandDetails: function calculateDemandDetails(rows) {
-    var details = [];
-    var musculos = (this.catalogoMeta || {}).musculos || [];
-    var catalogMap = this.getCatalogMap();
-    for (var m = 0; m < musculos.length; m++) {
-      details.push({
-        musculo: musculos[m],
-        total: 0,
-        sources: []
-      });
-    }
-    rows.forEach(function (row) {
-      var name = String(row.id_exercicio || row.nome_exercicio || "").toLowerCase();
-      var catalog = catalogMap[name];
-      if (!catalog || !catalog.demandas) return;
-      var sets = parseFloat(row["semana_" + App.currentWeek + "_sets"]) || 0;
-      for (var i = 0; i < details.length; i++) {
-        var detail = details[i];
-        var factor = parseFloat(catalog.demandas[detail.musculo]) || 0;
-        var contribution = factor * sets;
-        detail.total += contribution;
-        if (contribution > 0) {
-          detail.sources.push({
-            exercicio: row.nome_exercicio || row.id_exercicio,
-            treino: row.id_treino || "",
-            sets: sets,
-            fator: factor,
-            demanda: contribution
-          });
-        }
-      }
-    });
-    details.sort(function (a, b) {
-      return b.total - a.total;
-    });
-    return details;
-  },
-  renderPrescreverDemandSummary: function renderPrescreverDemandSummary() {
-    var box = document.getElementById("prescrever-demand-summary");
-    if (!box || !this.prescreverDraft) return;
-    var sessao = this.calculateDemandSummary(this.getDemandRowsForScope("sessao"));
-    var ficha = this.calculateDemandSummary(this.getDemandRowsForScope("ficha"));
-    box.innerHTML = '<div class="demand-grid"><div class="demand-card" onclick="App.openDemandModal(\'sessao\')"><div class="demand-title">Sessão · Ciclo ' + this.currentWeek + '</div>' + this.renderDemandBars(sessao) + '</div><div class="demand-card" onclick="App.openDemandModal(\'ficha\')"><div class="demand-title">Ficha · Ciclo ' + this.currentWeek + '</div>' + this.renderDemandBars(ficha) + "</div></div>";
-  },
-  renderDemandBars: function renderDemandBars(summary) {
-    var rows = [];
-    Object.keys(summary || {}).forEach(function (musculo) {
-      rows.push({ musculo: musculo, valor: summary[musculo] });
-    });
-    rows.sort(function (a, b) {
-      return b.valor - a.valor;
-    });
-    rows = rows.slice(0, 5);
-    if (rows.length === 0) return '<div class="empty-mini">Sem demanda calculada</div>';
-    var max = rows[0].valor || 1;
-    var html = "";
-    rows.forEach(function (row) {
-      var width = Math.round(row.valor / max * 100);
-      html += '<div class="demand-row"><span>' + xsEscapeHtml(row.musculo) + '</span><div class="demand-bar"><i style="width:' + width + '%"></i></div><strong>' + Math.round(row.valor * 10) / 10 + "</strong></div>";
-    });
+    for (var i = 0; i < this.RIR_OPTIONS.length; i++) html += '<option value="' + this.RIR_OPTIONS[i] + '"' + (String(selected) === this.RIR_OPTIONS[i] ? " selected" : "") + ">" + this.RIR_OPTIONS[i] + "</option>";
     return html;
   },
-  openDemandModal: function openDemandModal(scope) {
-    var rows = this.getDemandRowsForScope(scope);
-    var details = this.calculateDemandDetails(rows);
-    this.demandModalData = {
-      scope: scope,
-      title: (scope === "ficha" ? "Ficha" : "Sessão") + " · Ciclo " + this.currentWeek,
-      details: details
-    };
-    this.selectedDemandMuscleIndex = 0;
-    for (var i = 0; i < details.length; i++) {
-      if (details[i].total > 0) {
-        this.selectedDemandMuscleIndex = i;
-        break;
-      }
-    }
-    this.renderDemandModal();
-    var modal = document.getElementById("prescrever-demand-modal");
-    if (modal) modal.classList.add("show");
+  updateSeries: function updateSeries(exerciseIndex, seriesIndex, field, value) {
+    var fields = ["carga_absoluta", "reps_executadas", "rir"];
+    this.currentSession.exercicios[exerciseIndex].series[seriesIndex][fields[field]] = value;
+    this.saveSessionDraft();
   },
-  closeDemandModal: function closeDemandModal() {
-    var modal = document.getElementById("prescrever-demand-modal");
-    if (modal) modal.classList.remove("show");
+  saveSessionDraft: function saveSessionDraft() {
+    if (this.currentSession) localStorage.setItem("xsteam_v2_session_draft", JSON.stringify(this.currentSession));
   },
-  selectDemandMuscle: function selectDemandMuscle(index) {
-    this.selectedDemandMuscleIndex = index;
-    this.renderDemandModal();
+  restorePendingSession: function restorePendingSession() {
+    try {
+      var raw = localStorage.getItem("xsteam_v2_session_draft");
+      if (!raw) return;
+      this.currentSession = JSON.parse(raw);
+      this.showResumeDecision();
+    } catch (error) { localStorage.removeItem("xsteam_v2_session_draft"); }
   },
-  renderDemandModal: function renderDemandModal() {
-    var data = this.demandModalData || { title: "", details: [] };
-    var title = document.getElementById("prescrever-demand-title");
-    var table = document.getElementById("prescrever-demand-table");
-    var detailBox = document.getElementById("prescrever-demand-detail");
-    if (title) title.textContent = data.title;
-    if (!table || !detailBox) return;
-    var html = '<div class="demand-table-head"><span>Grupo muscular</span><span>Demanda</span></div>';
-    for (var i = 0; i < data.details.length; i++) {
-      var row = data.details[i];
-      var active = i === this.selectedDemandMuscleIndex ? " active" : "";
-      html += '<button class="demand-table-row' + active + '" onclick="App.selectDemandMuscle(' + i + ')"><span>' + xsEscapeHtml(row.musculo) + '</span><strong>' + Math.round(row.total * 10) / 10 + '</strong></button>';
-    }
-    table.innerHTML = html;
-
-    var selected = data.details[this.selectedDemandMuscleIndex];
-    if (!selected) {
-      detailBox.innerHTML = '<div class="empty-mini">Sem dados para detalhar.</div>';
-      return;
-    }
-    var detailHtml = '<div class="demand-detail-title">' + xsEscapeHtml(selected.musculo) + '</div>';
-    if (!selected.sources || selected.sources.length === 0) {
-      detailHtml += '<div class="empty-mini">Nenhum exercício prescrito gerando demanda neste ciclo.</div>';
-    } else {
-      selected.sources.forEach(function (source) {
-        detailHtml += '<div class="demand-source-row"><div><strong>' + xsEscapeHtml(source.exercicio) + '</strong><span>' + xsEscapeHtml(source.treino || "Treino aberto") + '</span></div><div><b>' + source.sets + '</b><small>séries</small></div><div><b>' + source.fator + '</b><small>fator</small></div><div><b>' + Math.round(source.demanda * 10) / 10 + '</b><small>demanda</small></div></div>';
-      });
-    }
-    detailBox.innerHTML = detailHtml;
+  showResumeDecision: function showResumeDecision() {
+    this.modal('<h2>Treino em andamento</h2><p>Encontramos um preenchimento salvo neste aparelho.</p><div class="modal-actions"><button class="secondary-button" type="button" onclick="App.discardPendingSession()">Descartar</button><button class="primary-button" type="button" onclick="App.resumePendingSession()">Retomar</button></div>');
   },
-  savePrescricaoTreino: function savePrescricaoTreino() {
-    var _this13 = this;
-    this.collectPrescreverDraftFromDom();
-    var draft = this.prescreverDraft || {};
-    if (!draft.id_ficha || !draft.id_treino) {
-      this.showToast("Informe ficha e treino", "warning");
-      return;
-    }
-    var payload = {
-      id_ficha: draft.id_ficha,
-      id_treino: draft.id_treino,
-      exercicios: draft.exercicios || []
-    };
-    this.callServer("savePrescricaoTreino", "clientSavePrescricaoTreino", payload).then(function (result) {
-      if (result && result.success === false) throw new Error(result.error || "Falha ao salvar");
-      if (result && result.success === true && result.data) result = result.data;
-      _this13.applyPrescriptionEditorData(result);
-      _this13.selectedFicha = payload.id_ficha;
-      _this13.selectedTreino = payload.id_treino;
-      _this13.showToast("Treino salvo na DB_Prescricao", "success");
-      _this13.renderPrescrever();
-      if (_this13.currentScreen === "treino") _this13.renderTreino();
-    }).catch(function (err) {
-      _this13.showToast(err.message || "Falha ao salvar treino", "error");
-      console.error("[XSTeam save prescricao]", err);
-    });
+  resumePendingSession: function resumePendingSession() {
+    this.closeModal();
+    this.goTo("treino");
+    this.renderSession();
   },
-  // ── LOCAL STORAGE ──
-  saveToLocal: function saveToLocal(rec) {
-    var p = this.readCache("xs_pending", []);
-    var idx = p.findIndex(function (r) {
-      return r.id_sessao === rec.id_sessao;
-    });
-    if (idx >= 0) p[idx] = rec;else p.push(rec);
-    this.writeCache("xs_pending", p);
-    this.pendingSync = p;
-    this.updateSyncBadge();
+  discardPendingSession: function discardPendingSession() {
+    this.currentSession = null;
+    localStorage.removeItem("xsteam_v2_session_draft");
+    this.closeModal();
+    this.renderTreinoSetup();
+    this.renderSession();
+    this.toast("Rascunho descartado.");
   },
-  getSaved: function getSaved(sid) {
-    var p = this.readCache("xs_pending", []);
-    return p.find(function (r) {
-      return r.id_sessao === sid;
-    });
+  openSubstituteModal: function openSubstituteModal(index) {
+    var item = this.currentSession.exercicios[index];
+    var options = item.substitutos || [];
+    if (!options.length) return this.toast("Não há substitutos liberados para este exercício.");
+    var html = '<h2>Escolher substituto</h2><p>A troca vale apenas para esta sessão.</p>';
+    for (var i = 0; i < options.length; i++) html += '<button class="substitute-option" type="button" onclick="App.applySubstitute(' + index + "," + i + ')"><strong>' + this.escape(options[i].nome_exercicio) + '</strong><span>' + this.escape(options[i].observacao || "Usar nesta sessão") + "</span></button>";
+    this.modal(html);
   },
-  loadPending: function loadPending() {
-    this.pendingSync = this.readCache("xs_pending", []);
+  applySubstitute: function applySubstitute(index, substituteIndex) {
+    var original = this.currentSession.exercicios[index];
+    var substitute = original.substitutos[substituteIndex];
+    if (!window.confirm("Substituir apenas nesta sessão? A ficha não será alterada.")) return;
+    original.exercicio_id = substitute.exercicio_id;
+    original.nome_exercicio = substitute.nome_exercicio;
+    original.tipo_execucao = "substituto";
+    original.referencia = null;
+    this.closeModal();
+    this.saveSessionDraft();
+    this.renderSession();
   },
-  updateSyncBadge: function updateSyncBadge() {
-    var dot = document.getElementById("sync-dot");
-    var count = document.getElementById("sync-count");
-    var pend = this.pendingSync.filter(function (r) {
-      return r.sync_status === "pending";
-    });
-    if (pend.length > 0) {
-      dot.classList.add("pending");
-      count.textContent = pend.length + " pendente" + (pend.length > 1 ? "s" : "");
-    } else {
-      dot.classList.remove("pending");
-      count.textContent = "Sincronizado";
-    }
+  removeFromSession: function removeFromSession(index) {
+    this.currentSession.exercicios[index].estado_execucao = "nao_realizado";
+    this.saveSessionDraft();
+    this.renderSession();
   },
-  // ── SYNC ──
-  bindSync: function bindSync() {
-    var _this12 = this;
-    document.getElementById("sync-badge").addEventListener("click", function () {
-      if (!navigator.onLine) {
-        _this12.showToast("Sem conexão", "error");
-        return;
-      }
-      _this12.syncToServer();
-    });
+  undoRemove: function undoRemove(index) {
+    this.currentSession.exercicios[index].estado_execucao = "realizado";
+    this.saveSessionDraft();
+    this.renderSession();
   },
-  syncToServer: function syncToServer() {
-    var _this13 = this;
-    var pend = this.pendingSync.filter(function (r) {
-      return r.sync_status === "pending";
-    });
-    if (pend.length === 0) return;
-    this.showToast("Sincronizando...", "warning");
-    this.callServer("syncExecucao", "clientSyncExecucao", {
-      records: pend
-    }).then(function (res) {
-      if (res.success) {
-        var all = _this13.readCache("xs_pending", []);
-        all.forEach(function (r) {
-          if (r.sync_status === "pending") r.sync_status = "clean";
-        });
-        _this13.writeCache("xs_pending", all);
-        _this13.pendingSync = all;
-        _this13.updateSyncBadge();
-        _this13.showToast(res.synced + " sincronizado(s) \u2713", "success");
-      } else _this13.showToast("Erro: " + res.error, "error");
-    }).catch(function () {
-      return _this13.showToast("Falha na sync", "error");
-    });
+  addExtraExercise: function addExtraExercise() {
+    var catalog = this.currentSession && this.currentSession.catalogo || [];
+    var html = '<h2>Exercício extra</h2><input id="extra-search" placeholder="Buscar exercício" oninput="App.filterExtraCatalog()"><div id="extra-options">';
+    for (var i = 0; i < catalog.length; i++) html += '<button type="button" class="substitute-option" data-extra="' + i + '" onclick="App.selectExtraExercise(' + i + ')"><strong>' + this.escape(catalog[i].nome_exercicio) + '</strong><span>' + this.escape(catalog[i].grupo_muscular) + "</span></button>";
+    this.modal(html + "</div>");
   },
-  // ═══════════════════════════════════════════════════════════
-  // TELA 2: PRESCRIÇÃO
-  // ═══════════════════════════════════════════════════════════
-  loadPrescricao: function loadPrescricao() {
-    this.renderPrescricao();
+  filterExtraCatalog: function filterExtraCatalog() {
+    var search = String(document.getElementById("extra-search").value || "").toLowerCase();
+    var buttons = document.querySelectorAll("[data-extra]");
+    for (var i = 0; i < buttons.length; i++) buttons[i].style.display = buttons[i].textContent.toLowerCase().indexOf(search) >= 0 ? "" : "none";
   },
-  renderPrescricao: function renderPrescricao() {
-    var _this14 = this;
-    var c = document.getElementById("prescricao-list");
-    var exs = this.prescricaoCache;
-    if (this.selectedFicha) exs = exs.filter(function (e) {
-      return String(e.id_ficha) === String(_this14.selectedFicha);
-    });
-    if (!exs || exs.length === 0) {
-      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sem prescrição</div></div>';
-      return;
-    }
-    var wk = this.currentWeek;
-    var sk = "semana_" + wk + "_sets";
-    var rk = "semana_" + wk + "_reps";
-    var dk = "semana_" + wk + "_descanso";
-    var groups = {};
-    exs.forEach(function (ex) {
-      var t = ex.id_treino || "Treino (Geral)";
-      if (!groups[t]) groups[t] = [];
-      groups[t].push(ex);
-    });
+  selectExtraExercise: function selectExtraExercise(index) {
+    var exercise = this.currentSession.catalogo[index];
+    this.currentSession.exercicios.push({ prescricao_item_id: "", exercicio_id: exercise.exercicio_id, exercicio_prescrito_id: "", nome_exercicio: exercise.nome_exercicio, ordem_exercicio: this.currentSession.exercicios.length + 1, sets: 1, reps: "", descanso: "", zona_rir: "-", series: [{ carga_absoluta: "", reps_executadas: "", rir: "-" }], substitutos: [], tipo_execucao: "extra", estado_execucao: "realizado" });
+    this.closeModal();
+    this.saveSessionDraft();
+    this.renderSession();
+  },
+  openPreviousModal: function openPreviousModal(index) {
+    var item = index === undefined ? null : this.currentSession.exercicios[index];
+    var ref = item && item.referencia;
+    if (!ref) return this.modal('<h2>Treino anterior</h2><p>Ainda não há referência salva para este exercício.</p>');
+    this.modal('<h2>Treino anterior</h2><p><strong>' + this.escape(item.nome_exercicio) + '</strong></p><p>' + this.escape(String(ref.series_json || "Sem detalhes disponíveis.")) + "</p>");
+  },
+  finishTraining: function finishTraining() {
+    var done = this.currentSession.exercicios.filter(function (item) { return item.estado_execucao === "realizado"; }).length;
+    if (!done) return this.toast("Registre ao menos um exercício realizado.");
+    this.modal('<h2>Finalizar treino</h2><p>' + done + ' exercício(s) realizado(s). A PSE da sessão é obrigatória.</p><label class="field-label">PSE (0 a 10)</label><input id="pse-range" type="range" min="0" max="10" step="1" value="5" oninput="App.syncPse(this.value)"><select id="pse-select" onchange="App.syncPse(this.value)">' + this.pseOptions() + '</select><div class="modal-actions"><button class="primary-button" type="button" onclick="App.syncSession()">Salvar treino</button></div>');
+  },
+  pseOptions: function pseOptions() {
     var html = "";
-    Object.keys(groups).forEach(function (treino, idx) {
-      html += "<div class=\"rx-treino-header\" onclick=\"App.toggleCollapse('rx-body-" + idx + "', 'rx-icon-" + idx + "')\">\n        <span>" + treino + "</span>\n        <span id=\"rx-icon-" + idx + "\" style=\"font-size:12px; transition:transform 0.3s; transform:rotate(180deg); color:var(--text-muted)\">\u25BC</span>\n      </div>";
-      html += "<div id=\"rx-body-" + idx + "\" class=\"rx-body-wrapper collapsed\">\n        <div class=\"rx-body-inner\">\n          <div class=\"rx-header\"><span>#</span><span style=\"text-align:left\">Exerc\xEDcio</span><span>Sets</span><span>Reps</span><span>Rest</span></div>";
-      groups[treino].forEach(function (ex) {
-        var obs = ex.observacoes ? "<div class=\"rx-obs\">" + ex.observacoes + "</div>" : "";
-        html += "<div class=\"rx-row\">\n          <span class=\"rx-order\">" + ex.ordem_exercicio + "</span>\n          <span class=\"rx-name\">" + ex.nome_exercicio + "</span>\n          <span class=\"rx-val sets\">" + (ex[sk] || "-") + "</span><span class=\"rx-val\">" + (ex[rk] || "-") + "</span><span class=\"rx-val\">" + (ex[dk] || "-") + "</span>\n          " + obs + "\n        </div>";
+    for (var i = 0; i <= 10; i++) html += '<option value="' + i + '"' + (i === 5 ? " selected" : "") + ">" + i + "</option>";
+    return html;
+  },
+  syncPse: function syncPse(value) {
+    document.getElementById("pse-range").value = value;
+    document.getElementById("pse-select").value = value;
+  },
+  syncSession: function syncSession() {
+    var self = this;
+    var pse = document.getElementById("pse-select").value;
+    if (pse === "") return this.toast("A PSE da sessão é obrigatória.");
+    var records = [];
+    this.currentSession.exercicios.forEach(function (item) {
+      item.series.forEach(function (series, index) {
+        records.push({ prescricao_item_id: item.prescricao_item_id, exercicio_id: item.exercicio_id, exercicio_prescrito_id: item.exercicio_prescrito_id, tipo_execucao: item.tipo_execucao, estado_execucao: item.estado_execucao, ordem_exercicio: item.ordem_exercicio, serie: index + 1, carga_absoluta: series.carga_absoluta, reps_executadas: series.reps_executadas, rir: series.rir });
       });
-      html += "</div></div>";
     });
-    c.innerHTML = html;
+    this.setSync("Salvando treino...");
+    this.call("syncTenantSession", { id_sessao: this.currentSession.id_sessao, id_operacao: this.currentSession.id_operacao, ficha_id: this.currentSession.ficha_id, treino_id: this.currentSession.treino_id, data_treino: this.currentSession.data_treino, pse: pse, records: records }).then(function () {
+      self.currentSession = null;
+      localStorage.removeItem("xsteam_v2_session_draft");
+      self.closeModal();
+      self.setSync("Sincronizado");
+      self.toast("Treino salvo.");
+      self.refresh();
+    }).catch(function (error) {
+      self.setSync("Rascunho salvo neste aparelho");
+      self.toast("Não foi possível sincronizar: " + error.message);
+    });
   },
-  changeWeek: function changeWeek(week) {
-    this.currentWeek = week;
-    xsEachNode(document.querySelectorAll(".week-btn"), function (b) {
-      return b.classList.remove("active");
-    });
-    document.querySelector(".week-btn[data-week=\"" + week + "\"]").classList.add("active");
-    if (this.currentScreen === "prescrever") this.renderPrescrever();else if (this.currentScreen === "prescricao") this.renderPrescricao();else if (this.currentScreen === "treino") this.renderTreino();
-  },
-  // ═══════════════════════════════════════════════════════════
-  // TELA 3: HISTÓRICO
-  // ═══════════════════════════════════════════════════════════
-  loadHistorico: function loadHistorico() {
-    this.renderHistorico();
-  },
-  openHistoryModal: function openHistoryModal(dateKey, treinoGroupStr) {
-    var rows = JSON.parse(decodeURIComponent(treinoGroupStr));
-    var title = document.getElementById("history-modal-title");
-    var content = document.getElementById("history-modal-content");
-    title.textContent = "Treino: " + dateKey;
-    var totalVol = 0;
-    var avgRPE = 0;
-    var setsDone = rows.length;
-    var exsMap = [];
-    rows.forEach(function (r) {
-      totalVol += r.carga_absoluta * r.reps_executadas;
-      avgRPE += parseFloat(r.rpe_sessao) || 0;
-      xsUniquePush(exsMap, r.id_exercicio);
-    });
-    if (setsDone > 0) avgRPE = (avgRPE / setsDone).toFixed(1);
-    var html = "\n      <div class=\"kpi-grid\" style=\"grid-template-columns:1fr 1fr; gap:8px;\">\n        <div class=\"kpi-card\" style=\"padding:12px;\">\n          <div class=\"kpi-value\" style=\"font-size:20px;\">" + this.fmtNum(totalVol) + "</div>\n          <div class=\"kpi-label\" style=\"font-size:9px;\">Vol. Load</div>\n        </div>\n        <div class=\"kpi-card\" style=\"padding:12px;\">\n          <div class=\"kpi-value\" style=\"font-size:20px;\">" + avgRPE + "</div>\n          <div class=\"kpi-label\" style=\"font-size:9px;\">RPE M\xE9dio</div>\n        </div>\n        <div class=\"kpi-card\" style=\"padding:12px;\">\n          <div class=\"kpi-value\" style=\"font-size:20px;\">" + exsMap.length + "</div>\n          <div class=\"kpi-label\" style=\"font-size:9px;\">Exerc\xEDcios</div>\n        </div>\n        <div class=\"kpi-card\" style=\"padding:12px;\">\n          <div class=\"kpi-value\" style=\"font-size:20px;\">" + setsDone + "</div>\n          <div class=\"kpi-label\" style=\"font-size:9px;\">S\xE9ries</div>\n        </div>\n      </div>\n      <div style=\"margin-top:16px;\">\n        <h4 style=\"font-size:12px; color:var(--text-secondary); text-transform:uppercase; margin-bottom:8px;\">Exerc\xEDcios Realizados</h4>\n    ";
-    var exList = {};
-    rows.forEach(function (r) {
-      if (!exList[r.id_exercicio]) exList[r.id_exercicio] = [];
-      exList[r.id_exercicio].push(r);
-    });
-    Object.keys(exList).forEach(function (exName) {
-      html += "<div style=\"font-size:13px; margin-bottom:4px; font-weight:600; color:var(--text-primary);\">" + exName + "</div>";
-      exList[exName].forEach(function (s, idx) {
-        html += "<div style=\"display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); padding-left:8px; margin-bottom:2px;\">\n          <span>S\xE9rie " + (idx + 1) + "</span>\n          <span style=\"color:var(--text-primary);\">" + s.carga_absoluta + "kg \xD7 " + s.reps_executadas + " (RIR: " + s.rir + ")</span>\n        </div>";
-      });
-      html += "<div style=\"height:8px;\"></div>";
-    });
-    html += "</div>";
-    content.innerHTML = html;
-    document.getElementById("history-modal").classList.add("show");
+  renderFichas: function renderFichas() {
+    var root = document.getElementById("fichas-list");
+    var fichas = this.bootstrap && this.bootstrap.fichas || [];
+    root.innerHTML = fichas.length ? fichas.map(function (ficha) { return '<article class="ficha-card' + (App.activeFicha && ficha.ficha_id === App.activeFicha.ficha_id ? " active-ficha" : "") + '"><h3>' + App.escape(ficha.nome_ficha) + '</h3><p>' + (ficha.ficha_id === (App.activeFicha && App.activeFicha.ficha_id) ? "Ficha ativa" : "Histórico de ficha") + '</p><span>Modo leitura</span></article>'; }).join("") : '<div class="empty-state">Nenhuma ficha visível.</div>';
   },
   renderHistorico: function renderHistorico() {
-    var _this15 = this;
-    var c = document.getElementById("historico-list");
-    var rows = this.historicoCache || [];
-    if (rows.length === 0) {
-      c.innerHTML = '<div class="empty-state"><div class="empty-icon">🕒</div><div class="empty-text">Nenhuma execução registrada</div></div>';
-      return;
-    }
-    var groups = {};
-    rows.forEach(function (r) {
-      if (!groups[r.data_treino]) groups[r.data_treino] = [];
-      groups[r.data_treino].push(r);
-    });
-    var html = "";
-    var sortedDates = Object.keys(groups).sort(function (a, b) {
-      var pa = a.split("/");
-      var pb = b.split("/");
-      return new Date(pb[2], pb[1] - 1, pb[0]) - new Date(pa[2], pa[1] - 1, pa[0]);
-    });
-    sortedDates.forEach(function (date) {
-      html += "<div class=\"section-title\" style=\"margin-top:16px\">" + date + "</div>";
-      var sessionRows = groups[date];
-      var exsSet = [];
-      sessionRows.forEach(function (r) {
-        xsUniquePush(exsSet, r.id_exercicio);
-      });
-      var totalVol = sessionRows.reduce(function (acc, r) {
-        return acc + r.carga_absoluta * r.reps_executadas;
-      }, 0);
-      var encodedData = encodeURIComponent(JSON.stringify(sessionRows));
-      html += "<div class=\"exercise-card\" style=\"padding:16px; margin-bottom:8px; cursor:pointer;\" onclick=\"App.openHistoryModal('" + date + "', '" + encodedData + "')\">\n        <div style=\"display:flex; justify-content:space-between; align-items:center;\">\n          <div>\n            <div style=\"font-weight:700; font-size:15px; color:var(--text-primary); margin-bottom:4px;\">Treino Finalizado</div>\n            <div style=\"font-size:11px; color:var(--text-muted);\">" + exsSet.length + " exerc\xEDcios \u2022 " + sessionRows.length + " s\xE9ries</div>\n          </div>\n          <div style=\"text-align:right;\">\n            <div style=\"color:var(--neon); font-weight:800; font-size:16px;\">" + _this15.fmtNum(totalVol) + "</div>\n            <div style=\"font-size:10px; color:var(--text-muted); text-transform:uppercase;\">Vol. Total</div>\n          </div>\n        </div>\n      </div>";
-    });
-    c.innerHTML = html;
+    var root = document.getElementById("historico-list");
+    var sessions = this.bootstrap && this.bootstrap.historico || [];
+    root.innerHTML = sessions.length ? sessions.map(function (session) { return '<article class="history-card"><p>' + App.escape(new Date(session.data_treino).toLocaleDateString("pt-BR")) + '</p><h3>Treino finalizado</h3><span>' + session.total_exercicios + " exercícios · " + session.total_series + ' séries</span><strong>' + Math.round(session.volume_total / 100) / 10 + "k</strong><small>PSE " + App.escape(session.pse || "-") + "</small></article>"; }).join("") : '<div class="empty-state">Os treinos finalizados aparecerão aqui.</div>';
   },
-  // ═══════════════════════════════════════════════════════════
-  // TELA 4: DASHBOARD DE CARGA
-  // ═══════════════════════════════════════════════════════════
-  loadCarga: function loadCarga() {
-    this.renderCarga();
+  loadProgress: function loadProgress(period) {
+    var self = this;
+    var root = document.getElementById("progresso-content");
+    this.call("getProgressData", { periodo: period }).then(function (data) {
+      var list = data.e1rm_por_exercicio || [];
+      root.innerHTML = '<div class="metric-grid"><div><span>Frequência</span><strong>' + data.sessoes + ' sessões</strong></div><div><span>Volume</span><strong>Em evolução</strong></div></div><h3>e1RM por exercício</h3>' + (list.length ? list.map(function (item) { var last = item.pontos[item.pontos.length - 1]; return '<div class="progress-line"><span>' + App.escape(item.exercicio_id) + '</span><strong>' + Math.round(last.e1rm) + " kg</strong></div>"; }).join("") : '<p class="muted">O e1RM aparece quando houver carga, repetições e RIR entre 0 e 5.</p>');
+    }).catch(function () { root.innerHTML = '<div class="empty-state">Não foi possível carregar o progresso agora.</div>'; });
   },
-  renderCarga: function renderCarga() {
-    var rows = this.historicoCache || [];
-    var kpi = document.getElementById("carga-kpis");
-    var charts = document.getElementById("carga-charts");
-    if (rows.length === 0) {
-      kpi.innerHTML = "";
-      charts.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Sem dados de execução ainda</div></div>';
-      return;
-    }
-    var groups = {};
-    var allExercises = [];
-    rows.forEach(function (r) {
-      xsUniquePush(allExercises, r.id_exercicio);
-      if (!groups[r.data_treino]) groups[r.data_treino] = {
-        data: r.data_treino,
-        rows: [],
-        volumeTotal: 0
-      };
-      groups[r.data_treino].rows.push(r);
-      groups[r.data_treino].volumeTotal += r.carga_absoluta * r.reps_executadas;
-    });
-    if (!this.selectedChartExercises) {
-      this.selectedChartExercises = allExercises.slice(0, 3);
-    }
-    var sessoes = xsObjectValues(groups).sort(function (a, b) {
-      var pa = a.data.split("/");
-      var pb = b.data.split("/");
-      return new Date(pa[2], pa[1] - 1, pa[0]) - new Date(pb[2], pb[1] - 1, pb[0]);
-    });
-    sessoes.forEach(function (s) {
-      var sumRPE = 0;
-      s.rows.forEach(function (r) {
-        return sumRPE += parseFloat(r.rpe_sessao) || 0;
-      });
-      s.rpeMedia = sumRPE / s.rows.length;
-      s.cargaGeral = s.rpeMedia * s.rows.length;
-    });
-    var lastSession = sessoes[sessoes.length - 1];
-    var totalVol = sessoes.reduce(function (s, x) {
-      return s + x.volumeTotal;
-    }, 0);
-    var avgRPE = sessoes.reduce(function (s, x) {
-      return s + x.rpeMedia;
-    }, 0) / sessoes.length;
-    kpi.innerHTML = "\n      <div class=\"kpi-card\"><div class=\"kpi-value\">" + this.fmtNum(lastSession.volumeTotal) + "</div>\n        <div class=\"kpi-label\">Volume Load</div><div class=\"kpi-sub\">\xDAltima sess\xE3o</div></div>\n      <div class=\"kpi-card\"><div class=\"kpi-value\">" + avgRPE.toFixed(1) + "</div>\n        <div class=\"kpi-label\">RPE M\xE9dio</div><div class=\"kpi-sub\">Carga interna</div></div>\n      <div class=\"kpi-card\"><div class=\"kpi-value\">" + this.fmtNum(totalVol) + "</div>\n        <div class=\"kpi-label\">Vol. Acumulado</div><div class=\"kpi-sub\">" + sessoes.length + " sess\xF5es</div></div>\n      <div class=\"kpi-card\"><div class=\"kpi-value\">" + sessoes.length + "</div>\n        <div class=\"kpi-label\">Sess\xF5es Totais</div><div class=\"kpi-sub\">Conclu\xEDdas</div></div>";
-    charts.innerHTML = "\n      <div id=\"chart-volume\" class=\"chart-container\"><div class=\"chart-title\" style=\"color:var(--neon)\">Volume Load por Sess\xE3o</div><div id=\"svg-volume\"></div></div>\n      <div id=\"chart-carga-geral\" class=\"chart-container\"><div class=\"chart-title\" style=\"color:var(--neon)\">Carga de Treino Geral (RPE \xD7 S\xE9ries)</div><div id=\"svg-carga-geral\"></div></div>\n      <div id=\"chart-prog\" class=\"chart-container\">\n        <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;\">\n          <div class=\"chart-title\" style=\"margin:0;color:var(--neon)\">Progress\xE3o (Carga M\xE1xima)</div>\n          <button onclick=\"App.openChartSettings()\" style=\"background:transparent;border:none;font-size:16px;cursor:pointer;\">\u2699\uFE0F</button>\n        </div>\n        <div id=\"svg-prog\"></div>\n      </div>\n    ";
-    this.drawBarChart("svg-volume", sessoes, "volumeTotal", "Volume", "#39FF14");
-    this.drawBarChart("svg-carga-geral", sessoes, "cargaGeral", "Carga Geral", "#00BFFF");
-    this.drawProgressionChart(rows);
-  },
-  openChartSettings: function openChartSettings() {
-    var _this16 = this;
-    var rows = this.historicoCache || [];
-    var allExs = [];
-    rows.forEach(function (r) {
-      xsUniquePush(allExs, r.id_exercicio);
-    });
-    var html = "";
-    allExs.sort().forEach(function (ex) {
-      var checked = (_this16.selectedChartExercises || []).indexOf(ex) !== -1 ? "checked" : "";
-      html += "<label style=\"display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-primary);\">\n        <input type=\"checkbox\" value=\"" + ex + "\" class=\"chart-ex-checkbox\" " + checked + " style=\"width:16px;height:16px;accent-color:var(--neon);\">\n        " + ex + "\n      </label>";
-    });
-    document.getElementById("chart-settings-list").innerHTML = html;
-    document.getElementById("chart-settings-modal").classList.add("show");
-  },
-  applyChartSettings: function applyChartSettings() {
-    var checkboxes = document.querySelectorAll(".chart-ex-checkbox:checked");
-    if (checkboxes.length > 3) {
-      this.showToast("Selecione no máximo 3 exercícios.", "warning");
-      return;
-    }
-    if (checkboxes.length === 0) {
-      this.showToast("Selecione pelo menos 1 exercício.", "warning");
-      return;
-    }
-    this.selectedChartExercises = [];
-    for (var i = 0; i < checkboxes.length; i++) {
-      this.selectedChartExercises.push(checkboxes[i].value);
-    }
-    document.getElementById("chart-settings-modal").classList.remove("show");
-    this.renderCarga();
-  },
-  drawBarChart: function drawBarChart(containerId, sessoes, key, label, color) {
-    var container = document.getElementById(containerId);
-    if (!container || sessoes.length === 0) return;
-    var W = 340;
-    var H = 160;
-    var padL = 40;
-    var padR = 10;
-    var padT = 15;
-    var padB = 30;
-    var cW = W - padL - padR;
-    var cH = H - padT - padB;
-    var maxVal = 1;
-    sessoes.forEach(function (s) {
-      var value = Number(s[key]) || 0;
-      if (value > maxVal) maxVal = value;
-    });
-    var n = sessoes.length;
-    var gap = cW / n;
-    var barW = Math.max(8, Math.min(28, gap - 4));
-    var svg = '<svg viewBox="0 0 ' + W + " " + H + '" xmlns="http://www.w3.org/2000/svg">';
-    for (var i = 0; i <= 4; i++) {
-      var y = padT + cH * i / 4;
-      var val = Math.round(maxVal * (1 - i / 4));
-      svg += '<line class="grid-line" x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '"/>';
-      svg += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" text-anchor="end" style="font-size:8px">' + this.fmtNum(val) + "</text>";
-    }
-    sessoes.forEach(function (s, i) {
-      var x = padL + gap * i + (gap - barW) / 2;
-      var h = s[key] / maxVal * cH;
-      var y = padT + cH - h;
-      svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" fill="' + color + '" rx="3" style="opacity:0.8"><title>' + s.data + ": " + Math.round(s[key]) + "</title></rect>";
-      svg += '<text x="' + (x + barW / 2) + '" y="' + (H - 6) + '" text-anchor="middle" style="font-size:8px">' + s.data.substring(0, 5) + "</text>";
-    });
-    svg += "</svg>";
-    container.innerHTML = svg;
-  },
-  drawProgressionChart: function drawProgressionChart(rows) {
-    var _this17 = this;
-    var container = document.getElementById("svg-prog");
-    if (!container || !this.selectedChartExercises || this.selectedChartExercises.length === 0) return;
-    var dataMap = {};
-    var allDates = [];
-    rows.forEach(function (r) {
-      if (_this17.selectedChartExercises.indexOf(r.id_exercicio) !== -1) {
-        if (!dataMap[r.id_exercicio]) dataMap[r.id_exercicio] = {};
-        if (!dataMap[r.id_exercicio][r.data_treino] || r.carga_absoluta > dataMap[r.id_exercicio][r.data_treino]) {
-          dataMap[r.id_exercicio][r.data_treino] = parseFloat(r.carga_absoluta);
-        }
-        xsUniquePush(allDates, r.data_treino);
-      }
-    });
-    var dates = allDates.sort(function (a, b) {
-      var pa = a.split("/");
-      var pb = b.split("/");
-      return new Date(pa[2], pa[1] - 1, pa[0]) - new Date(pb[2], pb[1] - 1, pb[0]);
-    });
-    var colors = ["#39FF14", "#00BFFF", "#FF6B9D"];
-    var W = 340;
-    var H = 180;
-    var padL = 40;
-    var padR = 10;
-    var padT = 15;
-    var padB = 30;
-    var cW = W - padL - padR;
-    var cH = H - padT - padB;
-    var maxVal = 1;
-    this.selectedChartExercises.forEach(function (ex) {
-      xsObjectValues(dataMap[ex] || {}).forEach(function (v) {
-        if (v > maxVal) maxVal = v;
-      });
-    });
-    var svg = '<svg viewBox="0 0 ' + W + " " + H + '" xmlns="http://www.w3.org/2000/svg">';
-    for (var i = 0; i <= 4; i++) {
-      var y = padT + cH * i / 4;
-      var val = Math.round(maxVal * (1 - i / 4));
-      svg += '<line class="grid-line" x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '"/>';
-      svg += '<text x="' + (padL - 4) + '" y="' + (y + 3) + '" text-anchor="end" style="font-size:8px">' + val + "kg</text>";
-    }
-    var gap = dates.length > 1 ? cW / (dates.length - 1) : cW;
-    dates.forEach(function (d, i) {
-      var x = padL + (dates.length > 1 ? gap * i : cW / 2);
-      svg += '<text x="' + x + '" y="' + (H - 6) + '" text-anchor="middle" style="font-size:8px">' + d.substring(0, 5) + "</text>";
-    });
-    this.selectedChartExercises.forEach(function (exName, ei) {
-      var color = colors[ei % colors.length];
-      var pts = [];
-      dates.forEach(function (d, i) {
-        if (dataMap[exName] && dataMap[exName][d]) {
-          var x = padL + (dates.length > 1 ? gap * i : cW / 2);
-          var _y = padT + cH - dataMap[exName][d] / maxVal * cH;
-          pts.push({
-            x: x,
-            y: _y,
-            val: dataMap[exName][d]
-          });
-        }
-      });
-      if (pts.length > 1) {
-        svg += '<polyline points="' + pts.map(function (p) {
-          return p.x + "," + p.y;
-        }).join(" ") + '" stroke="' + color + '" stroke-width="2" fill="none"/>';
-      }
-      pts.forEach(function (p) {
-        svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="' + color + '"><title>' + exName + ": " + p.val + "kg</title></circle>";
-        svg += '<text x="' + p.x + '" y="' + (p.y - 6) + '" text-anchor="middle" style="font-size:8px;fill:var(--text-primary);">' + p.val + "</text>";
-      });
-      svg += '<text x="' + (padL + ei * 90) + '" y="' + (padT - 4) + '" style="fill:' + color + ';font-size:9px">● ' + exName.substring(0, 10) + "</text>";
-    });
-    svg += "</svg>";
-    container.innerHTML = svg;
-  },
-  fmtNum: function fmtNum(n) {
-    return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n));
-  },
-  showToast: function showToast(msg, type) {
-    var t = document.getElementById("toast");
-    if (!t) {
-      t = document.createElement("div");
-      t.id = "toast";
-      t.className = "toast";
-      document.body.appendChild(t);
-    }
-    t.textContent = msg;
-    t.className = "toast " + type;
-    setTimeout(function () {
-      t.classList.add("show");
-    }, 0);
-    clearTimeout(this._tt);
-    this._tt = setTimeout(function () {
-      return t.classList.remove("show");
-    }, 2500);
-  }
+  modal: function modal(html) { document.getElementById("modal-root").innerHTML = '<div class="modal-backdrop"><div class="modal-card"><button class="modal-close" type="button" onclick="App.closeModal()">×</button>' + html + "</div></div>"; },
+  closeModal: function closeModal() { document.getElementById("modal-root").innerHTML = ""; },
+  setSync: function setSync(text) { document.getElementById("sync-state").textContent = text; },
+  toast: function toast(message) { var node = document.getElementById("toast"); node.textContent = message; node.classList.add("show"); setTimeout(function () { node.classList.remove("show"); }, 3500); },
+  escape: function escape(value) { return String(value === undefined || value === null ? "" : value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 };
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", function () {
-    return App.init();
-  });
-} else {
-  App.init();
-}
+document.addEventListener("DOMContentLoaded", function () { App.init(); });
 </script>

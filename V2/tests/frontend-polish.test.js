@@ -7,49 +7,25 @@ const script = fs.readFileSync(path.join(root, "app", "script.html"), "utf8");
 const style = fs.readFileSync(path.join(root, "app", "style.html"), "utf8");
 
 const tests = [
-  [
-    "main app stylesheet should include premium athletic polish tokens",
-    () => {
-      assert.match(style, /--surface-gradient:/);
-      assert.match(style, /--shadow-elevated:/);
-      assert.match(style, /--brand-light-ray:/);
-      assert.match(style, /body::before/);
-      assert.match(
-        style,
-        /linear-gradient\(135deg,\s*var\(--neon\),\s*var\(--neon-soft\)/,
-      );
-    },
-  ],
-  [
-    "background light should vary by active tab",
-    () => {
-      assert.match(script, /document\.body\.setAttribute\("data-screen", screenId\)/);
-      ["treino", "prescricao", "prescrever", "historico", "carga"].forEach(
-        (screen) => {
-          assert.match(
-            style,
-            new RegExp('body\\[data-screen="' + screen + '"\\]'),
-          );
-        },
-      );
-      assert.match(style, /--ambient-light:/);
-      assert.match(style, /background:\s*var\(--ambient-light\)/);
-    },
-  ],
+  ["student PWA keeps the dark athletic visual system", () => {
+    ["--neon:", "--blue:", "--purple:", "--red:"].forEach((token) => assert.match(style, new RegExp(token)));
+    assert.match(style, /radial-gradient/);
+    assert.match(style, /linear-gradient\(90deg,var\(--blue\),var\(--purple\),var\(--red\)\)/);
+  }],
+  ["student navigation and cards have mobile-safe styling", () => {
+    [".student-nav", ".exercise-card", ".history-card", ".modal-backdrop"].forEach((selector) => assert.match(style, new RegExp(selector.replace(".", "\\."))));
+    assert.match(style, /max-width:560px/);
+  }],
+  ["PSE and RIR controls use a compact intensity scale", () => {
+    assert.match(script, /pse-range/);
+    assert.match(script, /RIR_OPTIONS/);
+    assert.match(style, /input\[type=range\]/);
+  }]
 ];
 
 let failed = 0;
-for (const testCase of tests) {
-  const name = testCase[0];
-  const run = testCase[1];
-  try {
-    run();
-    console.log("PASS " + name);
-  } catch (error) {
-    failed++;
-    console.error("FAIL " + name);
-    console.error(error.message);
-  }
-}
-
-if (failed > 0) process.exit(1);
+tests.forEach(([name, run]) => {
+  try { run(); console.log("PASS " + name); }
+  catch (error) { failed++; console.error("FAIL " + name); console.error(error.message); }
+});
+if (failed) process.exit(1);
