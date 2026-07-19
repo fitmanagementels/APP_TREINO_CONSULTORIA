@@ -1,111 +1,157 @@
 # Contexto e Status do Projeto — XSTeam V2
 
-Última atualização: 18 de julho de 2026 (America/Sao_Paulo)
+> **Fonte de verdade para continuidade local, troca de máquina e outro chat/IA.**
+>
+> Última atualização: 19 de julho de 2026 (America/Sao_Paulo)
 
 ## Resumo executivo
 
-- A V1 permanece preservada, sem edições, em `V1_BACKUP/`.
-- A V2 constrói um PWA Gerenciador central para o treinador e uma instância single-tenant por aluno.
-- A Fase 1 foi concluída localmente: estrutura do Gerenciador, schema central não destrutivo, perfis de alunos, WhatsApp, catálogo de exercícios e rascunhos de fichas.
-- Nenhuma operação foi feita no Google Drive do treinador. A criação de planilhas-modelo, scripts, permissões e o primeiro teste integrado continuarão manuais.
-- A próxima etapa é o contrato de publicação com o PWA do aluno: fichas visíveis, ficha ativa e histórico somente-leitura.
+- A V1 está preservada e não deve ser alterada em `V1_BACKUP/`. A V2 é desenvolvida exclusivamente em `V2/`.
+- O produto reúne um PWA Gerenciador para o treinador e um PWA single-tenant isolado para cada aluno.
+- O código local já entrega perfis, catálogo central, prescrição, publicação, réplica, PWA do aluno e provisionamento automático.
+- O treinador configurou manualmente o Apps Script/Cloud do Gerenciador, executou `setupManagerDatabase()` com sucesso e cadastrou/provisionou uma instância de teste. O agente não acessa nem altera o Google Drive.
+- O primeiro acesso do proprietário a cada novo Apps Script individual pede autorização única. Isso não acontece ao publicar ou ativar novas fichas.
+- Faltam a validação integrada completa, importador controlado do catálogo, observabilidade/caches de demanda e atualizador de releases sem troca de URL.
 
 ## Objetivo do projeto
 
-- **Objetivo principal:** permitir que um treinador administre todos os alunos a partir de um único PWA Gerenciador, enquanto cada aluno usa um PWA isolado para executar o treino.
-- **Usuários:** treinador (Gerenciador) e cada aluno (sua própria instância single-tenant).
-- **Critérios de sucesso:** boa UX mesmo sob limites do Apps Script; dados isolados por aluno; publicação, atualização e arquivamento rastreáveis; URLs dos alunos estáveis após o primeiro deploy.
+- **Objetivo principal:** um treinador gerencia todos os alunos em um PWA; cada aluno usa somente seu PWA e sua planilha de treino isolados.
+- **Público:** um treinador e um aluno por instância single-tenant.
+- **Critérios de sucesso:** UX boa dentro das quotas do Apps Script, dados isolados, publicação rastreável, aluno sem acesso à planilha/Drive e URLs estáveis em atualizações futuras.
 
 ## Estado atual
 
-- **Branch:** `v2-manager`.
-- **Fase atual:** Fase 1 concluída localmente e testada.
-- **PWA Gerenciador:** `V2/manager/app/`.
-- **PWA-modelo do aluno:** `V2/app/`; ainda conserva o comportamento herdado da V1 e será transformado na Fase 2.
-- **Validação externa pendente:** colar/publicar o Gerenciador no Apps Script ligado à planilha central e testar com uma cópia não produtiva. Essa validação é responsabilidade manual do treinador; o agente não acessa o Drive.
+| Item | Estado observado |
+|---|---|
+| Branch local | `v2-manager` |
+| Base local | V1 preservada; V2 é a área ativa |
+| Gerenciador e PWA do aluno | Implementados em `V2/manager/app/` e `V2/app/` |
+| Banco central | `setupManagerDatabase()` executado com sucesso pelo treinador |
+| Ambiente Google | Drive API e Apps Script API habilitadas; projeto Cloud associado; Apps Script API habilitada para a conta do treinador |
+| OAuth do Gerenciador | Externo/em teste; a conta do treinador está cadastrada como usuária de teste |
+| Gerenciador remoto | PWA aberto, aluno de teste cadastrado e botão de provisionamento acionado |
+| Instância de teste | PWA individual foi aberto pelo treinador; confirmar no Gerenciador se está `provisionada` e com URL/IDs gravados |
+| Próxima validação | Publicar/ativar uma ficha de teste e concluir uma sessão no PWA do aluno |
 
-## Fase 1 entregue
+## Implementado localmente
 
-### Gerenciador e dados centrais
+### Gerenciador central
 
-- PWA com páginas `Alunos`, `Prescrições`, `Acompanhamento` e `Saúde do App`.
-- Implantação inicial configurada como `USER_DEPLOYING` + `MYSELF`: somente o treinador acessa o Gerenciador.
-- `setupManagerDatabase()` é aditivo: cria apenas abas ausentes e acrescenta cabeçalhos ausentes; não limpa, apaga ou substitui dados.
-- Abas centrais: `Alunos`, `Instancias`, `Fichas`, `Prescricoes`, `Prescricao_Itens`, `Catalogo_Exercicios`, `Publicacoes`, `Sessoes_Monitoradas`, `Eventos_Observabilidade`, `Resumo_Uso_Diario` e `Fila_Operacoes`.
+- Páginas `Alunos`, `Prescrições`, `Acompanhamento` e `Saúde do App`.
+- Cadastro de aluno, telefone normalizado para WhatsApp, status e observações.
+- Setup aditivo/idempotente das abas `Alunos`, `Instancias`, `Fichas`, `Prescricoes`, `Prescricao_Itens`, `Catalogo_Exercicios`, `Publicacoes`, `Sessoes_Monitoradas`, `Eventos_Observabilidade`, `Resumo_Uso_Diario` e `Fila_Operacoes`.
+- Catálogo central com coeficientes musculares, versão e fila de recálculo.
+- Fichas com quatro ciclos de séries, repetições, descanso e zona de RIR; rascunho, revisão, publicação, ocultação e ativação são ações separadas.
+- Publicação/ativação replicam fichas, ciclos, substitutos e catálogo em lote para a planilha do aluno, sem apagar execuções ou fichas visíveis.
+- Provisionamento cria pasta do aluno, cópia do modelo de dados, Apps Script vinculado, conteúdo do modelo de código, versão, deployment e URL; falhas são registradas em `Instancias`.
 
-### Alunos e contato
+### PWA do aluno
 
-- Perfil com nome, telefone brasileiro normalizado em `telefone_e164`, status e observações de gestão.
-- Botão de WhatsApp baseado em `https://wa.me/<telefone>`.
-- Cada novo perfil cria exatamente um registro de instância com estado `nao_provisionada`; a planilha/script do aluno ainda não são criados nesta fase.
+- Navegação limitada a `Treino`, `Fichas`, `Histórico` e `Progresso`; não existe prescrição no app do aluno.
+- Todas as fichas visíveis podem ser lidas; apenas a ficha ativa inicia sessão.
+- Rascunho local permite retomar ou descartar após recarregar/fechar o PWA.
+- Sessão aceita carga, repetições, RIR opcional, PSE obrigatório, substitutos prescritos, omissões e exercícios extras sem alterar a ficha.
+- RIR usa `-`, `0` a `5` a cada `0,5` e `6+`, com menu e slider colorido sincronizados. PSE usa escala obrigatória de 0 a 10.
+- Histórico tem detalhe da execução. Progresso atual mostra frequência, volume e melhor e1RM por exercício/sessão.
+- e1RM usa Brzycki ajustado por RIR apenas quando o RIR é numérico de 0 a 5; `-` e `6+` não calculam e1RM.
 
-### Catálogo e rascunhos
+### Limites, desempenho e dados
 
-- O catálogo passou a ser central, em `Catalogo_Exercicios`, com IDs estáveis, grupo, tipo, coeficientes musculares, ativo e `versao_catalogo`.
-- Uma alteração de coeficiente incrementa a versão e cria uma operação `recalcular_catalogo` pendente. O processamento em cada instância será implementado posteriormente.
-- Uma ficha nova nasce como `rascunho`, `oculta` e `inativa`.
-- O rascunho registra para cada exercício quatro ciclos de séries, repetições, descanso e `zona_rir`.
-- A prévia de demanda usa `coeficiente muscular × séries prescritas`. Ela é uma ajuda no editor; os caches oficiais por aluno serão construídos na Fase 3.
+- Planilhas diferentes isolam dados, mas web apps executados como treinador compartilham quotas da conta publicadora.
+- O fluxo obrigatório é boot curto, pacote único para iniciar treino, rascunho local, nenhuma chamada por série, escrita final em lote, lock por instância, idempotência e retentativa controlada.
+- O catálogo ativo completo é replicado para permitir substitutos e extras sem busca de catálogo durante uma sessão.
+- Observabilidade não deve receber nome, telefone, carga, exercício ou texto livre.
 
-## Decisões que não devem ser desfeitas
+## Decisões essenciais
 
-| Decisão | Motivo | Impacto |
+| Decisão | Por que | Impacto |
 |---|---|---|
-| V1 em `V1_BACKUP/` | Preservar uma versão recuperável enquanto a V2 evolui. | Nunca editar a V1 durante a V2. |
-| Gerenciador separado do aluno | O treinador concentra cadastro, prescrição, publicação e análise. | O aluno não terá editor de prescrição. |
-| Planilhas isoladas por aluno | Evita concorrência e vazamento de dados entre alunos. | Dados operacionais permanecem single-tenant. |
-| Catálogo central e dinâmico | Correções precisam recalcular estatísticas históricas derivadas. | Não congelar demanda como fato imutável. |
-| Publicar, ocultar e ativar são ações distintas | Uma ficha pode aparecer no histórico sem ser preenchível. | Apenas uma ficha ativa recebe novas execuções. |
-| Atualização no mesmo deployment | Alunos não devem receber link novo em uma atualização normal. | A Fase 4 usará `deployments.update`. |
-| Drive fora do acesso do agente | O treinador mantém controle de arquivos, permissões e autorizações. | Código local + instruções; nenhuma manipulação remota pelo agente. |
+| V1 em `V1_BACKUP/` | Recuperação segura | Nunca editar a V1 durante a V2. |
+| Gerenciador separado do aluno | Prescrição é responsabilidade do treinador | O aluno só executa, consulta fichas, histórico e progresso. |
+| Planilha/script por aluno | Isolamento e menor concorrência | Criar instâncias pelo Gerenciador, não manualmente. |
+| Catálogo central, replicado e versionado | Correções devem alterar indicadores derivados | Importar/recalcular de forma controlada. |
+| Publicar, ocultar e ativar separados | Histórico e preenchimento têm regras distintas | Somente uma ficha ativa por aluno. |
+| PSE e RIR separados | PSE é da sessão; RIR é da série/exercício | PSE obrigatório e RIR opcional. |
+| Execução local-first | Evita perda de treino e excesso de chamadas | Nunca adicionar chamada remota a cada série. |
+| `USER_DEPLOYING` no aluno | Aluno não recebe acesso ao Drive/planilha | Treinador autoriza cada instância uma vez; aluno apenas faz login. |
+| Agente sem Drive | Controle remoto permanece com o treinador | Configurações são manuais e relatadas por prints/resultados. |
 
-## Limites do Apps Script e UX
+## Configuração Google já realizada pelo treinador
 
-Planilhas diferentes isolam dados, porém Web Apps executados como o treinador podem compartilhar quotas e concorrência da conta publicadora. Por isso, são obrigatórios: boot curto, no máximo uma requisição ativa por cliente, fila local de sincronização, operações idempotentes, lotes de escrita, retentativa progressiva e bloqueio de escrita por instância. A experiência do aluno não pode depender de uma chamada longa ou síncrona a cada interação.
+> Não registrar IDs, links privados, telefones ou dados identificáveis aqui. Os IDs estão nas propriedades do Apps Script do Gerenciador.
+
+1. Estrutura de Drive criada: `00_MODELOS`, `01_GERENCIADOR`, `02_ALUNOS`, `99_ALUNOS_ARQUIVADOS`.
+2. Modelo de dados do aluno e modelo de código do aluno foram separados.
+3. O Apps Script da planilha do Gerenciador foi associado ao projeto Cloud `XSTeam-App`.
+4. Drive API e Apps Script API foram habilitadas; o acesso à Apps Script API também foi habilitado em `script.google.com/home/usersettings`.
+5. OAuth configurado como externo/em teste e a conta do treinador adicionada como usuária de teste.
+6. Propriedades configuradas: `MANAGER_SPREADSHEET_ID`, `STUDENTS_FOLDER_ID`, `STUDENT_TEMPLATE_SPREADSHEET_ID`, `STUDENT_TEMPLATE_SCRIPT_ID` e `STUDENT_TEMPLATE_VERSION` (`v2.0.0`).
+7. `setupManagerDatabase()` foi executado com sucesso; aluno de teste cadastrado e criação de instância acionada.
+
+## Autorização e experiência do aluno
+
+- Criar aluno/instância no Gerenciador não pede nova permissão: o Gerenciador já autorizado faz a automação.
+- O primeiro acesso do treinador ao PWA recém-criado pode pedir autorização única, por ser um novo projeto Apps Script filho. Isso é por aluno, não por ficha.
+- O aluno final deve apenas entrar com Google e abrir o link; não deve aceitar permissões de Drive/Planilhas. Se vir essa tela, não deve aceitar: guardar o print e investigar.
+- O OAuth externo em modo de teste permite apenas testadores listados e pode exigir nova autorização periódica. Antes de uso continuado, definir a estratégia de produção/verificação e revisar escopos mínimos.
 
 ## Histórico relevante
 
 | Commit | Mudança | Impacto |
 |---|---|---|
-| `3c8ee8c` | Organizou `V1_BACKUP/` e `V2/`. | Separação segura entre versões. |
-| `109d480` | Registrou a especificação aprovada da V2. | Fonte das decisões arquiteturais. |
-| `0d9f127` | Registrou o plano de implementação. | Fases e testes definidos. |
-| `a78edd1` | Scaffold do PWA Gerenciador. | Base das quatro páginas. |
-| `76e3676` | Schema central não destrutivo. | Planilha do Gerenciador preparada. |
-| `8a0ed15` | Perfis de aluno e WhatsApp. | Cadastro e contato centralizados. |
-| `5cc94f1` | Catálogo e rascunhos. | RIR, demanda planejada e versão de catálogo. |
+| `3c8ee8c` | Separou V1 e V2 | Backup recuperável. |
+| `78ad264` | Publicação completa para a instância | Fichas, ciclos, substitutos e catálogo replicados. |
+| `409b9e8` | Histórico e progresso do aluno | Detalhe, frequência, volume e e1RM. |
+| `4451162` | Slider RIR | Controle compacto e sincronizado. |
+| `9d0430f` | Provisionamento automático | Criação de instâncias pelo Gerenciador. |
+| `8416cd5` | Acesso autenticado do aluno | Usuário deve estar logado em conta Google. |
+| `a7d7013` | Logos oficiais embutidos | Remove dependência de SVG externo no código local. |
 
-## Próximos passos
+## Verificação local
 
-1. Executar a Fase 2: converter `V2/app/` no produto exclusivo do aluno, sem editor de prescrição.
-2. Criar o contrato de publicação: ficha visível no histórico, ficha ativa preenchível e validação também no backend.
-3. Depois da Fase 2, construir caches de demanda, sessões monitoradas e painel de saúde dos PWAs dos alunos.
-4. Ao chegar à fase de provisão, o treinador criará manualmente os modelos no Drive (`00_MODELOS`) e inserirá/autorizará o código do Gerenciador na planilha de `01_GERENCIADOR`.
+Em 19/07/2026:
+
+- `node V2/tests/app-regression.test.js` — passou.
+- `node V2/tests/frontend-polish.test.js` — passou.
+- `node V2/manager/tests/manager-regression.test.js` — uma falha conhecida: o teste ainda procura o antigo SVG `XS-Team-Alternativa-Horizontal-Cor.svg`, mas `a7d7013` usa `brand-logo-horizontal.html` e `brand-logo-symbol.html`. É uma asserção desatualizada; não houve falha funcional do backend observada.
+
+## Pendências e próximos passos
+
+1. Confirmar no Gerenciador que a instância de teste está `provisionada`, com `pwa_url`, `spreadsheet_id`, `script_id` e `deployment_id` preenchidos.
+2. Testar o link com uma conta Google de aluno diferente da conta do treinador; confirmar login simples e ausência de permissão de Drive/Planilhas.
+3. Importar o catálogo bruto `IMPORT_CATALOGO_V1__NAO_EDITAR` para `Catalogo_Exercicios` por fluxo controlado, preservando a aba bruta.
+4. Criar ficha de teste, incluir exercícios/substitutos, revisar, publicar, ativar e confirmar a réplica.
+5. Executar sessão completa: rascunho/retomada, substituto, extra/omitido, PSE, sincronização, histórico e progresso.
+6. Atualizar a asserção de branding em `V2/manager/tests/manager-regression.test.js` e copiar os dois arquivos de logo ao Apps Script do Gerenciador antes do próximo deploy visual.
+7. Completar/validar importador-recalculador de catálogo, caches de demanda, acompanhamento, saúde/observabilidade e atualizador em lote de releases preservando URLs.
 
 ## Arquivos e pastas importantes
 
 | Caminho | Função |
 |---|---|
-| `V1_BACKUP/` | Código da versão anterior, preservado. |
-| `V2/manager/app/Codigo.gs` | Backend do Gerenciador e schema central. |
-| `V2/manager/app/index.html` | Shell do Gerenciador. |
-| `V2/manager/app/script.html` | Navegação, Alunos, catálogo e rascunhos. |
-| `V2/manager/app/style.html` | Interface responsiva do Gerenciador. |
-| `V2/manager/tests/manager-regression.test.js` | Regressões estáticas da Fase 1. |
-| `V2/docs/superpowers/specs/2026-07-18-xsteam-v2-manager-single-tenant-design.md` | Especificação aprovada. |
-| `V2/docs/superpowers/plans/2026-07-18-xsteam-v2-implementation.md` | Plano por fases. |
+| `V1_BACKUP/` | Versão anterior preservada; não editar. |
+| `V2/app/` | Pacote-modelo do PWA do aluno. |
+| `V2/app/Código.gs` | Backend de fichas, sessão, histórico e progresso. |
+| `V2/manager/app/` | PWA e backend central do treinador. |
+| `V2/manager/app/Codigo.gs` | Schema, publicação, réplica e provisionamento. |
+| `V2/manager/app/brand-logo-*.html` | Logos embutidos locais. |
+| `V2/manager/tests/manager-regression.test.js` | Regressão do Gerenciador; uma asserção de branding está pendente. |
+| `V2/tests/app-regression.test.js` | Regressão do aluno e Knowledge Hub. |
+| `V2/tests/frontend-polish.test.js` | Regressão visual/controles do aluno. |
+| `V2/docs/knowledge hub.html` | Painel HTML deste resumo. |
+| `V2/docs/superpowers/specs/` | Especificações aprovadas. |
+| `V2/docs/superpowers/plans/2026-07-19-xsteam-v2-consolidated-implementation.md` | Plano histórico, parcialmente superado por este resumo. |
 
-## Como retomar em outra sessão
+## Como retomar em outra máquina ou sessão
 
-1. Leia este arquivo, a especificação e o plano.
-2. Execute `node V2/manager/tests/manager-regression.test.js`, `node V2/tests/app-regression.test.js` e `node V2/tests/frontend-polish.test.js`.
-3. Verifique `git status --short` e mantenha `V1_BACKUP/` intocado.
-4. Continue pela Fase 2, começando com testes que removem a prescrição do PWA do aluno e definem fichas visíveis/ativas.
+1. Copie/clonar o repositório completo e abra a branch `v2-manager`.
+2. Leia este arquivo e `V2/docs/knowledge hub.html`.
+3. Leia as especificações do Gerenciador e do aluno em `V2/docs/superpowers/specs/` antes de mudar regras do produto.
+4. Execute as três suítes de **Verificação local**; trate a falha de branding como pendência conhecida, nunca como autorização para ignorar outras falhas.
+5. Rode `git status --short` antes de editar. Não use operações Git destrutivas.
+6. O agente da nova sessão não deve acessar o Drive; peça prints/resultados ao treinador.
+7. Continue pelo primeiro item de **Pendências e próximos passos** ainda não validado.
 
-## Contexto para outro chat ou IA
+## Contexto compacto para outro chat ou IA
 
-- **Objetivo essencial:** PWA Gerenciador central + instâncias single-tenant de alunos atualizáveis sem troca de URL.
-- **Onde parei:** Fase 1 local concluída; Gerenciador já cadastra alunos, mantém catálogo e prepara rascunhos.
-- **Não desfazer:** V1 preservada, setup aditivo, catálogo central dinâmico, separação publicar/ocultar/ativar, Drive fora do acesso do agente e UX protegida contra quotas.
-- **Próxima ação:** Fase 2 — contrato de publicação e conversão do PWA do aluno.
-- **Lacuna externa:** teste real no Apps Script/Planilha central feito manualmente pelo treinador.
+> XSTeam V2 é um sistema de treino com PWA Gerenciador central e um PWA/planilha isolado por aluno. A V1 está congelada em `V1_BACKUP/`. O código local em `V2/manager/app` e `V2/app` implementa fluxo central, PWA do aluno, réplica e provisionamento. O treinador configurou o Apps Script/Cloud do Gerenciador, rodou `setupManagerDatabase`, cadastrou aluno de teste e abriu a primeira instância. O agente não pode acessar o Google Drive. Preserve catálogo central versionado, publicação/ocultação/ativação separadas, PSE obrigatório/RIR opcional, execução local-first, uma ficha ativa e PWA do aluno sem prescrição. Próxima validação: confirmar instância provisionada, testar com conta de aluno, publicar/ativar ficha e concluir sessão. Há uma asserção de branding antiga no teste do Gerenciador após a troca para logos HTML. Não documentar IDs, links privados, telefones ou dados de aluno.
