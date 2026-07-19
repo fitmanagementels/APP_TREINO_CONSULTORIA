@@ -43,6 +43,8 @@ function routeManagerAction(payload) {
   if (action === "publishFicha") return publishFicha(data.publicacao_id);
   if (action === "setFichaVisibility") return setFichaVisibility(data.ficha_id, data.visible);
   if (action === "activateFicha") return activateFicha(data.ficha_id);
+  if (action === "getProvisioningReadiness") return getProvisioningReadiness();
+  if (action === "createStudentInstance") return createStudentInstance(data.aluno_id);
   return { success: false, error: "Ação desconhecida" };
 }
 
@@ -65,6 +67,118 @@ function getManagerSpreadsheet() {
   return activeSpreadsheet;
 }
 
+function getProvisioningConfig() {
+  var properties = PropertiesService.getScriptProperties();
+  var config = {
+    template_spreadsheet_id: String(properties.getProperty("STUDENT_TEMPLATE_SPREADSHEET_ID") || "").trim(),
+    students_folder_id: String(properties.getProperty("STUDENTS_FOLDER_ID") || "").trim(),
+    template_script_id: String(properties.getProperty("STUDENT_TEMPLATE_SCRIPT_ID") || "").trim(),
+    template_version: String(properties.getProperty("STUDENT_TEMPLATE_VERSION") || "v2")
+  };
+  var missing = [];
+  if (!config.template_spreadsheet_id) missing.push("STUDENT_TEMPLATE_SPREADSHEET_ID");
+  if (!config.students_folder_id) missing.push("STUDENTS_FOLDER_ID");
+  if (!config.template_script_id) missing.push("STUDENT_TEMPLATE_SCRIPT_ID");
+  config.ready = missing.length === 0;
+  config.missing = missing;
+  return config;
+}
+
+function getProvisioningReadiness() {
+  var config = getProvisioningConfig();
+  return { success: true, ready: config.ready, missing: config.missing };
+}
+
+function scriptApiRequest(method, path, body) {
+  var options = {
+    method: method,
+    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  };
+  if (body !== undefined && body !== null) {
+    options.contentType = "application/json";
+    options.payload = JSON.stringify(body);
+  }
+  var response = UrlFetchApp.fetch("https://script.googleapis.com/v1" + path, options);
+  var status = response.getResponseCode();
+  var text = response.getContentText();
+  var parsed = text ? JSON.parse(text) : {};
+  if (status < 200 || status >= 300) {
+    var message = parsed && parsed.error && parsed.error.message ? parsed.error.message : "Erro desconhecido";
+    throw new Error("Apps Script API (" + status + "): " + String(message).replace(/[\r\n]+/g, " ").slice(0, 240));
+  }
+  return parsed;
+}
+
+function prepareTenantScriptContent(templateContent, spreadsheetId) {
+  var content = JSON.parse(JSON.stringify(templateContent || {}));
+  var files = content.files || [];
+  var changed = false;
+  for (var i = 0; i < files.length; i += 1) {
+    if (files[i].type === "SERVER_JS" && /DEFAULT_SPREADSHEET_ID/.test(String(files[i].source || ""))) {
+      files[i].source = String(files[i].source).replace(/var DEFAULT_SPREADSHEET_ID = "[^"]*";/, 'var DEFAULT_SPREADSHEET_ID = "' + spreadsheetId + '";');
+      changed = true;
+    }
+  }
+  if (!changed) throw new Error("O código-modelo não contém DEFAULT_SPREADSHEET_ID para vincular a planilha do aluno.");
+  return content;
+}
+
+function getWebAppUrl(deployment) {
+  var entries = deployment && deployment.entryPoints ? deployment.entryPoints : [];
+  for (var i = 0; i < entries.length; i += 1) if (entries[i].webApp && entries[i].webApp.url) return entries[i].webApp.url;
+  return "";
+}
+
+function createStudentInstance(alunoId) {
+  var alunoLookup = getRecordWithRow("Alunos", "aluno_id", alunoId);
+  var instanceLookup = getRecordWithRow("Instancias", "aluno_id", alunoId);
+  if (!alunoLookup || !instanceLookup) return { success: false, error: "Aluno ou instância não encontrados." };
+  var instance = instanceLookup.record;
+  if (String(instance.status_provisionamento) === "provisionada" && instance.spreadsheet_id && instance.pwa_url) return { success: true, already_provisioned: true, instancia: instance };
+  var config = getProvisioningConfig();
+  if (!config.ready) return { success: false, error: "Configuração de provisionamento incompleta: " + config.missing.join(", ") };
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return { success: false, error: "Outra criação está em andamento. Tente novamente." };
+  var now = new Date().toISOString();
+  var copiedSpreadsheetId = String(instance.spreadsheet_id || "");
+  try {
+    instance.status_provisionamento = "em_provisionamento";
+    instance.erro_resumo = "";
+    instance.updated_at = now;
+    updateManagerRecord("Instancias", instanceLookup.row, instance);
+    var studentFolder = DriveApp.getFolderById(config.students_folder_id).createFolder(String(alunoLookup.record.nome || "Aluno").replace(/[\\/:*?"<>|]/g, "-").trim() || "Aluno");
+    var spreadsheetFile = DriveApp.getFileById(config.template_spreadsheet_id).makeCopy("XSTeam V2 — " + alunoLookup.record.nome, studentFolder);
+    copiedSpreadsheetId = spreadsheetFile.getId();
+    var project = scriptApiRequest("post", "/projects", { title: "XSTeam V2 — " + alunoLookup.record.nome, parentId: copiedSpreadsheetId });
+    var templateContent = scriptApiRequest("get", "/projects/" + encodeURIComponent(config.template_script_id) + "/content");
+    scriptApiRequest("put", "/projects/" + encodeURIComponent(project.scriptId) + "/content", prepareTenantScriptContent(templateContent, copiedSpreadsheetId));
+    var version = scriptApiRequest("post", "/projects/" + encodeURIComponent(project.scriptId) + "/versions", { description: "Provisionamento " + now });
+    var deployment = scriptApiRequest("post", "/projects/" + encodeURIComponent(project.scriptId) + "/deployments", { versionNumber: version.versionNumber, description: "PWA do aluno" });
+    var pwaUrl = getWebAppUrl(deployment);
+    if (!pwaUrl) throw new Error("A API criou a implantação, mas não retornou a URL do web app. Verifique o manifesto do modelo.");
+    instance.status_provisionamento = "provisionada";
+    instance.folder_id = studentFolder.getId();
+    instance.spreadsheet_id = copiedSpreadsheetId;
+    instance.script_id = project.scriptId;
+    instance.deployment_id = deployment.deploymentId;
+    instance.pwa_url = pwaUrl;
+    instance.versao_template = config.template_version;
+    instance.erro_resumo = "";
+    instance.updated_at = new Date().toISOString();
+    updateManagerRecord("Instancias", instanceLookup.row, instance);
+    return { success: true, instancia: instance };
+  } catch (error) {
+    instance.status_provisionamento = "falha";
+    instance.spreadsheet_id = copiedSpreadsheetId || instance.spreadsheet_id;
+    instance.erro_resumo = String(error.message || error).slice(0, 500);
+    instance.updated_at = new Date().toISOString();
+    updateManagerRecord("Instancias", instanceLookup.row, instance);
+    return { success: false, error: instance.erro_resumo, instancia: instance };
+  } finally {
+    lock.releaseLock();
+  }
+}
 function setupManagerDatabase() {
   var ss = getManagerSpreadsheet();
   var result = [];

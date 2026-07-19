@@ -148,6 +148,28 @@ const tests = [
     },
   ],
   [
+    "manager provisions a tenant from a data template and a separate script template",
+    function () {
+      ["getProvisioningConfig", "scriptApiRequest", "createStudentInstance", "prepareTenantScriptContent"].forEach(function (name) {
+        assert.match(code, new RegExp("function\\s+" + name + "\\s*\\("));
+      });
+      const provisioning = bodyOf(code, "createStudentInstance");
+      ["DriveApp", "makeCopy", "projects", "versions", "deployments", "parentId", "status_provisionamento"].forEach(function (token) {
+        assert.match(provisioning, new RegExp(token));
+      });
+    },
+  ],
+
+  [
+    "manager profile exposes the controlled provision action",
+    function () {
+      assert.match(script, /provision-instance/);
+      assert.match(script, /createStudentInstance/);
+      assert.match(script, /status_provisionamento/);
+    },
+  ],
+
+  [
     "manager shell provides XSTEAM responsive navigation",
     function () {
       assert.match(index, /id="app-sidebar"/);
