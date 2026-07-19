@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c1715" />
+    <title>XSTeam — Gerenciador</title>
+    <?!= include('style'); ?>
+  </head>
+  <body>
+    <div id="global-loader" class="global-loader" role="status">Carregando gerenciador...</div>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">XSTEAM V2</p>
+        <h1>Gerenciador</h1>
+      </div>
+      <p id="connection-status" class="connection-status">Conectando</p>
+    </header>
+    <nav class="app-nav" aria-label="Navegação principal">
+      <button type="button" class="nav-button is-active" data-page="alunos">Alunos</button>
+      <button type="button" class="nav-button" data-page="prescricoes">Prescrições</button>
+      <button type="button" class="nav-button" data-page="acompanhamento">Acompanhamento</button>
+      <button type="button" class="nav-button" data-page="saude">Saúde do App</button>
+    </nav>
+    <main id="app-root" class="app-root" tabindex="-1"></main>
+    <?!= include('script'); ?>
+  </body>
+</html>

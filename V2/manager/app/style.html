@@ -1,0 +1,19 @@
+<style>
+  :root { --bg: #f4f7f5; --surface: #ffffff; --ink: #10211d; --muted: #64736e; --accent: #1d7358; --line: #d9e3de; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: Arial, sans-serif; }
+  .global-loader { align-items: center; background: var(--bg); display: flex; inset: 0; justify-content: center; position: fixed; z-index: 10; }
+  .app-header { align-items: end; background: #0c1715; color: #fff; display: flex; justify-content: space-between; padding: 24px max(20px, calc((100% - 1000px) / 2)); }
+  h1, h2, p { margin: 0; }
+  h1 { font-size: 28px; }
+  .eyebrow { color: var(--accent); font-size: 11px; font-weight: bold; letter-spacing: .12em; margin-bottom: 6px; }
+  .app-header .eyebrow { color: #85d5b6; }
+  .connection-status { color: #b8cbc4; font-size: 13px; }
+  .app-nav { display: flex; gap: 8px; margin: 0 auto; max-width: 1000px; overflow-x: auto; padding: 16px 20px; }
+  .nav-button { background: transparent; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); cursor: pointer; padding: 10px 14px; white-space: nowrap; }
+  .nav-button.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .app-root { margin: 0 auto; max-width: 1000px; padding: 4px 20px 32px; }
+  .page-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 10px 25px rgba(16, 33, 29, .05); padding: 24px; }
+  .page-card p:last-child { color: var(--muted); line-height: 1.5; margin-top: 10px; }
+  @media (max-width: 560px) { .app-header { align-items: start; flex-direction: column; gap: 10px; } }
+</style>

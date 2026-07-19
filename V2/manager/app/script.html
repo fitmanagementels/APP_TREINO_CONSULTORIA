@@ -1,0 +1,74 @@
+<script>
+var ManagerApp = (function () {
+  var state = { page: "alunos", boot: null };
+
+  function getRoot() {
+    return document.getElementById("app-root");
+  }
+
+  function setLoader(visible, text) {
+    var loader = document.getElementById("global-loader");
+    if (!loader) return;
+    loader.style.display = visible ? "flex" : "none";
+    if (text) loader.textContent = text;
+  }
+
+  function render() {
+    var root = getRoot();
+    if (!root) return;
+    var content = {
+      alunos: ["Alunos", "Cadastre e acompanhe cada aluno em um só lugar."],
+      prescricoes: ["Prescrições", "Crie rascunhos, revise e prepare fichas para publicação."],
+      acompanhamento: ["Acompanhamento", "Indicadores de execução serão exibidos aqui."],
+      saude: ["Saúde do App", "Erros e sincronizações dos apps dos alunos serão monitorados aqui."]
+    }[state.page];
+    root.innerHTML = "<section class=\"page-card\"><p class=\"eyebrow\">EM CONSTRUÇÃO</p><h2>" + content[0] + "</h2><p>" + content[1] + "</p></section>";
+  }
+
+  function selectPage(page) {
+    state.page = page;
+    var buttons = document.querySelectorAll(".nav-button");
+    for (var i = 0; i < buttons.length; i += 1) {
+      var selected = buttons[i].getAttribute("data-page") === page;
+      buttons[i].className = selected ? "nav-button is-active" : "nav-button";
+    }
+    render();
+  }
+
+  function attachNavigation() {
+    var buttons = document.querySelectorAll(".nav-button");
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].onclick = function () { selectPage(this.getAttribute("data-page")); };
+    }
+  }
+
+  function boot() {
+    attachNavigation();
+    render();
+    if (!window.google || !google.script || !google.script.run) {
+      document.getElementById("connection-status").textContent = "Prévia local";
+      setLoader(false);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (response) {
+        state.boot = response;
+        document.getElementById("connection-status").textContent = "Pronto";
+        setLoader(false);
+      })
+      .withFailureHandler(function () {
+        document.getElementById("connection-status").textContent = "Falha ao conectar";
+        setLoader(false);
+      })
+      .routeManagerAction({ action: "getBootstrap" });
+  }
+
+  return { boot: boot, selectPage: selectPage };
+}());
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", ManagerApp.boot);
+} else {
+  ManagerApp.boot();
+}
+</script>
