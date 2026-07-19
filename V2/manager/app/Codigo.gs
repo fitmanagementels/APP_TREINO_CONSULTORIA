@@ -492,7 +492,8 @@ function publishFicha(publicacaoId) {
   fichaLookup.record.publicacao_atual_id = publication.publicacao_id;
   fichaLookup.record.updated_at = now;
   updateManagerRecord("Fichas", fichaLookup.row, fichaLookup.record);
-  return { success: true, publicacao: publication, ficha: fichaLookup.record };
+  var replica = replicatePublishedFichaToTenant(publication.publicacao_id);
+  return { success: true, publicacao: publication, ficha: fichaLookup.record, replica: replica };
 }
 
 function setFichaVisibility(fichaId, visible) {
@@ -542,22 +543,26 @@ function ensureTenantPublicationSheet(ss, name, headers) {
   return sheet;
 }
 
+MANAGER_SHEETS.push({ name: "Prescricao_Substitutos", headers: ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo", "created_at", "updated_at"] });
+function upsertTenantPublicationRecord(sheet, idHeader, idValue, headers, record) {
+  var values = sheet.getDataRange().getValues();
+  var idIndex = values[0].indexOf(idHeader);
+  var row = headers.map(function (header) { return record[header] === undefined ? "" : record[header]; });
+  for (var i = 1; i < values.length; i += 1) if (String(values[i][idIndex]) === String(idValue)) { sheet.getRange(i + 1, 1, 1, row.length).setValues([row]); return; }
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+}
 function replicatePublishedFichaToTenant(publicacaoId) {
   var publication = getRecordWithRow("Publicacoes", "publicacao_id", publicacaoId);
   if (!publication) return { success: false, error: "Publicação não encontrada." };
-  var instances = getManagerRecords("Instancias").filter(function (item) {
-    return String(item.aluno_id) === String(publication.record.aluno_id) && String(item.spreadsheet_id || "") !== "";
-  });
-  if (!instances.length) return { success: true, pending_instance: true };
-  var tenant = SpreadsheetApp.openById(instances[0].spreadsheet_id);
+  var instance = getManagerRecords("Instancias").filter(function (item) { return String(item.aluno_id) === String(publication.record.aluno_id) && String(item.spreadsheet_id || "") !== ""; })[0];
+  if (!instance) return { success: true, pending_instance: true };
+  var tenant = SpreadsheetApp.openById(instance.spreadsheet_id);
   var fichaSheet = ensureTenantPublicationSheet(tenant, "DB_Fichas", ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"]);
   var prescriptionSheet = ensureTenantPublicationSheet(tenant, "DB_Prescricao", ["prescricao_item_id", "publicacao_id", "id_ficha", "id_treino", "id_exercicio", "ordem_exercicio", "observacoes"]);
+  var substituteSheet = ensureTenantPublicationSheet(tenant, "DB_Prescricao_Substitutos", ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo"]);
   var ficha = getRecordWithRow("Fichas", "ficha_id", publication.record.ficha_id).record;
-  fichaSheet.appendRow([ficha.ficha_id, ficha.nome_ficha, ficha.visibilidade_aluno, ficha.estado_uso, publication.record.publicacao_id, new Date().toISOString()]);
-  var items = getManagerRecords("Prescricao_Itens").filter(function (item) { return String(item.prescricao_id) === String(publication.record.prescricao_id); });
-  var rows = items.map(function (item) {
-    return [item.prescricao_item_id, publication.record.publicacao_id, item.ficha_id, item.treino_id, item.exercicio_id, item.ordem, item.observacoes];
-  });
-  if (rows.length) prescriptionSheet.getRange(prescriptionSheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
-  return { success: true, replicated: true, spreadsheet_id: instances[0].spreadsheet_id };
+  upsertTenantPublicationRecord(fichaSheet, "ficha_id", ficha.ficha_id, ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"], { ficha_id: ficha.ficha_id, nome_ficha: ficha.nome_ficha, visibilidade_aluno: ficha.visibilidade_aluno, estado_uso: ficha.estado_uso, publicacao_id: publication.record.publicacao_id, updated_at: new Date().toISOString() });
+  getManagerRecords("Prescricao_Itens").filter(function (item) { return String(item.prescricao_id) === String(publication.record.prescricao_id); }).forEach(function (item) { upsertTenantPublicationRecord(prescriptionSheet, "prescricao_item_id", item.prescricao_item_id, ["prescricao_item_id", "publicacao_id", "id_ficha", "id_treino", "id_exercicio", "ordem_exercicio", "observacoes"], { prescricao_item_id: item.prescricao_item_id, publicacao_id: publication.record.publicacao_id, id_ficha: item.ficha_id, id_treino: item.treino_id, id_exercicio: item.exercicio_id, ordem_exercicio: item.ordem, observacoes: item.observacoes }); });
+  getManagerRecords("Prescricao_Substitutos").filter(function (item) { return String(item.ficha_id) === String(ficha.ficha_id); }).forEach(function (item) { upsertTenantPublicationRecord(substituteSheet, "substituto_id", item.substituto_id, ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo"], item); });
+  return { success: true, replicated: true, spreadsheet_id: instance.spreadsheet_id };
 }

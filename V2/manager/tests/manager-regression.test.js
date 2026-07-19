@@ -113,6 +113,16 @@ const tests = [
       assert.match(replication, /DB_Prescricao/);
     },
   ],
+
+  [
+    "tenant replication is idempotent and includes per-item substitutes",
+    function () {
+      assert.match(code, /Prescricao_Substitutos/);
+      const replication = bodyOf(code, "replicatePublishedFichaToTenant");
+      assert.match(replication, /upsertTenantPublicationRecord/);
+      assert.match(replication, /DB_Prescricao_Substitutos/);
+    },
+  ],
   [
     "manager shell provides XSTEAM responsive navigation",
     function () {
@@ -120,6 +130,8 @@ const tests = [
       assert.match(index, /id="sidebar-toggle"/);
       assert.match(index, /id="contextual-bar"/);
       assert.match(index, /aria-controls="app-sidebar"/);
+      assert.match(index, /XS-Team-Alternativa-Horizontal-Cor\.svg/);
+      assert.match(index, /XS-Team-Símbolo-Principal-Cor\.svg/);
       assert.match(style, /#D9FF2F/i);
       assert.match(style, /@media\s*\(max-width:\s*1023px\)/);
       assert.match(style, /@media\s*\(max-width:\s*700px\)/);
