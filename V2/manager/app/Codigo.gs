@@ -546,29 +546,111 @@ function ensureTenantPublicationSheet(ss, name, headers) {
 }
 
 MANAGER_SHEETS.push({ name: "Prescricao_Substitutos", headers: ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo", "created_at", "updated_at"] });
-function upsertTenantPublicationRecord(sheet, idHeader, idValue, headers, record) {
+function upsertTenantPublicationRecords(sheet, idHeader, headers, records) {
+  if (!records || records.length === 0) return { inserted: 0, updated: 0 };
   var values = sheet.getDataRange().getValues();
-  var idIndex = values[0].indexOf(idHeader);
-  var row = headers.map(function (header) { return record[header] === undefined ? "" : record[header]; });
-  for (var i = 1; i < values.length; i += 1) if (String(values[i][idIndex]) === String(idValue)) { sheet.getRange(i + 1, 1, 1, row.length).setValues([row]); return; }
-  sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  var sheetHeaders = values[0].map(function (header) { return String(header || ""); });
+  var columnByHeader = {};
+  for (var column = 0; column < sheetHeaders.length; column += 1) columnByHeader[sheetHeaders[column]] = column;
+  if (columnByHeader[idHeader] === undefined) throw new Error("Chave de réplica ausente: " + idHeader);
+  var existingRowById = {};
+  for (var rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    var existingId = String(values[rowIndex][columnByHeader[idHeader]] || "");
+    if (existingId) existingRowById[existingId] = rowIndex;
+  }
+  var inserted = 0;
+  var updated = 0;
+  for (var recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+    var record = records[recordIndex];
+    var idValue = String(record[idHeader] || "");
+    if (!idValue) continue;
+    var targetRow = existingRowById[idValue];
+    if (targetRow === undefined) {
+      targetRow = values.length;
+      values.push(sheetHeaders.map(function () { return ""; }));
+      existingRowById[idValue] = targetRow;
+      inserted += 1;
+    } else {
+      updated += 1;
+    }
+    for (var headerIndex = 0; headerIndex < headers.length; headerIndex += 1) {
+      var header = headers[headerIndex];
+      if (columnByHeader[header] !== undefined) values[targetRow][columnByHeader[header]] = record[header] === undefined ? "" : record[header];
+    }
+  }
+  sheet.getRange(1, 1, values.length, sheetHeaders.length).setValues(values);
+  return { inserted: inserted, updated: updated };
 }
+
+function upsertTenantPublicationRecord(sheet, idHeader, idValue, headers, record) {
+  record = record || {};
+  record[idHeader] = idValue;
+  return upsertTenantPublicationRecords(sheet, idHeader, headers, [record]);
+}
+
+function mapTenantPrescriptionRecord(item, publicationId) {
+  var record = {
+    prescricao_item_id: item.prescricao_item_id,
+    publicacao_id: publicationId,
+    id_ficha: item.ficha_id,
+    id_treino: item.treino_id,
+    nome_treino: item.nome_treino,
+    id_exercicio: item.exercicio_id,
+    ordem_exercicio: item.ordem,
+    observacoes: item.observacoes,
+    zona_rir: ""
+  };
+  for (var week = 1; week <= 4; week += 1) {
+    record["semana_" + week + "_sets"] = item["semana_" + week + "_series"];
+    record["semana_" + week + "_reps"] = item["semana_" + week + "_repeticoes"];
+    record["semana_" + week + "_descanso"] = item["semana_" + week + "_descanso_segundos"];
+    record["semana_" + week + "_zona_rir"] = item["semana_" + week + "_zona_rir"];
+  }
+  return record;
+}
+
+function mapTenantCatalogRecord(item) {
+  return {
+    exercicio_id: item.exercicio_id,
+    nome_exercicio: item.nome_exercicio,
+    grupo_muscular: item.grupo_muscular,
+    tipo_exercicio: item.tipo_exercicio,
+    ativo: item.ativo,
+    versao_catalogo: item.versao_catalogo,
+    updated_at: item.updated_at || new Date().toISOString()
+  };
+}
+
 function replicatePublishedFichaToTenant(publicacaoId) {
   var publication = getRecordWithRow("Publicacoes", "publicacao_id", publicacaoId);
   if (!publication) return { success: false, error: "Publicação não encontrada." };
   var instance = getManagerRecords("Instancias").filter(function (item) { return String(item.aluno_id) === String(publication.record.aluno_id) && String(item.spreadsheet_id || "") !== ""; })[0];
   if (!instance) return { success: true, pending_instance: true };
   var tenant = SpreadsheetApp.openById(instance.spreadsheet_id);
-  var fichaSheet = ensureTenantPublicationSheet(tenant, "DB_Fichas", ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"]);
-  var prescriptionSheet = ensureTenantPublicationSheet(tenant, "DB_Prescricao", ["prescricao_item_id", "publicacao_id", "id_ficha", "id_treino", "id_exercicio", "ordem_exercicio", "observacoes"]);
-  var substituteSheet = ensureTenantPublicationSheet(tenant, "DB_Prescricao_Substitutos", ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo"]);
-  var ficha = getRecordWithRow("Fichas", "ficha_id", publication.record.ficha_id).record;
-  upsertTenantPublicationRecord(fichaSheet, "ficha_id", ficha.ficha_id, ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"], { ficha_id: ficha.ficha_id, nome_ficha: ficha.nome_ficha, visibilidade_aluno: ficha.visibilidade_aluno, estado_uso: ficha.estado_uso, publicacao_id: publication.record.publicacao_id, updated_at: new Date().toISOString() });
-  getManagerRecords("Prescricao_Itens").filter(function (item) { return String(item.prescricao_id) === String(publication.record.prescricao_id); }).forEach(function (item) { upsertTenantPublicationRecord(prescriptionSheet, "prescricao_item_id", item.prescricao_item_id, ["prescricao_item_id", "publicacao_id", "id_ficha", "id_treino", "id_exercicio", "ordem_exercicio", "observacoes"], { prescricao_item_id: item.prescricao_item_id, publicacao_id: publication.record.publicacao_id, id_ficha: item.ficha_id, id_treino: item.treino_id, id_exercicio: item.exercicio_id, ordem_exercicio: item.ordem, observacoes: item.observacoes }); });
-  getManagerRecords("Prescricao_Substitutos").filter(function (item) { return String(item.ficha_id) === String(ficha.ficha_id); }).forEach(function (item) { upsertTenantPublicationRecord(substituteSheet, "substituto_id", item.substituto_id, ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo"], item); });
-  return { success: true, replicated: true, spreadsheet_id: instance.spreadsheet_id };
+  var fichaHeaders = ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"];
+  var prescriptionHeaders = ["prescricao_item_id", "publicacao_id", "id_ficha", "id_treino", "nome_treino", "id_exercicio", "ordem_exercicio", "observacoes"];
+  var catalogHeaders = ["exercicio_id", "nome_exercicio", "grupo_muscular", "tipo_exercicio", "ativo", "versao_catalogo", "updated_at"];
+  for (var week = 1; week <= 4; week += 1) {
+    prescriptionHeaders.push("semana_" + week + "_sets", "semana_" + week + "_reps", "semana_" + week + "_descanso", "semana_" + week + "_zona_rir");
+  }
+  prescriptionHeaders.push("zona_rir");
+  var substituteHeaders = ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo"];
+  var fichaSheet = ensureTenantPublicationSheet(tenant, "DB_Fichas", fichaHeaders);
+  var prescriptionSheet = ensureTenantPublicationSheet(tenant, "DB_Prescricao", prescriptionHeaders);
+  var catalogSheet = ensureTenantPublicationSheet(tenant, "DB_Catalogo_Exercicios", catalogHeaders);
+  var substituteSheet = ensureTenantPublicationSheet(tenant, "DB_Prescricao_Substitutos", substituteHeaders);
+  var fichaLookup = getRecordWithRow("Fichas", "ficha_id", publication.record.ficha_id);
+  if (!fichaLookup) return { success: false, error: "Ficha da publicação não encontrada." };
+  var ficha = fichaLookup.record;
+  var now = new Date().toISOString();
+  var fichaResult = upsertTenantPublicationRecords(fichaSheet, "ficha_id", fichaHeaders, [{ ficha_id: ficha.ficha_id, nome_ficha: ficha.nome_ficha, visibilidade_aluno: ficha.visibilidade_aluno, estado_uso: ficha.estado_uso, publicacao_id: publication.record.publicacao_id, updated_at: now }]);
+  var itens = getManagerRecords("Prescricao_Itens").filter(function (item) { return String(item.prescricao_id) === String(publication.record.prescricao_id); }).map(function (item) { return mapTenantPrescriptionRecord(item, publication.record.publicacao_id); });
+  var prescriptionResult = upsertTenantPublicationRecords(prescriptionSheet, "prescricao_item_id", prescriptionHeaders, itens);
+  var catalogResult = upsertTenantPublicationRecords(catalogSheet, "exercicio_id", catalogHeaders, getManagerRecords("Catalogo_Exercicios").map(mapTenantCatalogRecord));
+  var substitutes = getManagerRecords("Prescricao_Substitutos").filter(function (item) { return String(item.ficha_id) === String(ficha.ficha_id); });
+  var substituteResult = upsertTenantPublicationRecords(substituteSheet, "substituto_id", substituteHeaders, substitutes);
+  return { success: true, replicated: true, spreadsheet_id: instance.spreadsheet_id, ficha: fichaResult, prescricao: prescriptionResult, catalogo: catalogResult, substitutos: substituteResult };
 }
-
 function syncTenantFichaStates(alunoId) {
   var instance = getManagerRecords("Instancias").filter(function (item) {
     return String(item.aluno_id) === String(alunoId) && String(item.spreadsheet_id || "") !== "";

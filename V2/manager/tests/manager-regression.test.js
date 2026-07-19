@@ -125,6 +125,21 @@ const tests = [
   ],
 
   [
+    "tenant publication replicates all prescription cycles and the complete catalog in batches",
+    function () {
+      const replication = bodyOf(code, "replicatePublishedFichaToTenant");
+      ["DB_Catalogo_Exercicios", "nome_treino", "upsertTenantPublicationRecords"].forEach(function (token) {
+        assert.match(replication, new RegExp(token));
+      });
+      var mapped = bodyOf(code, "mapTenantPrescriptionRecord");
+      ["semana_", "_sets", "_reps", "_descanso", "_zona_rir"].forEach(function (token) {
+        assert.match(mapped, new RegExp(token));
+      });
+      assert.match(code, /function\s+upsertTenantPublicationRecords\s*\(/);
+    },
+  ],
+
+  [
     "visibility and activation synchronize the tenant fiche states",
     function () {
       assert.match(code, /function\s+syncTenantFichaStates\s*\(/);

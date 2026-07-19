@@ -29,8 +29,14 @@ const tests = [
   }],
   ["student routes do not allow prescription editing", () => {
     const routes = bodyOf(code, "routeAction");
-    ["getTenantBootstrap", "getTreinoSession", "syncTenantSession", "getVisibleFichas", "getProgressData"].forEach((action) => assert.match(routes, new RegExp(action)));
+    ["getTenantBootstrap", "getTreinoSession", "syncTenantSession", "getVisibleFichas", "getFichaReadOnly", "getProgressData"].forEach((action) => assert.match(routes, new RegExp(action)));
     assert.doesNotMatch(routes, /getPrescriptionEditorData|savePrescricaoTreino/);
+  }],
+  ["visible fichas can be opened only in read-only mode", () => {
+    assert.match(code, /function\s+getFichaReadOnly\s*\(/);
+    ["openFichaDetail", "renderFichaDetail"].forEach((name) => assert.match(script, new RegExp(name + "\\s*[(:]")));
+    const detail = script.slice(script.indexOf("renderFichaDetail:"), script.indexOf("renderHistorico:"));
+    assert.doesNotMatch(detail, /startTraining/);
   }],
   ["student navigation has only the four approved areas", () => {
     ["Treino", "Fichas", "Histórico", "Progresso"].forEach((label) => assert.match(index, new RegExp(label)));

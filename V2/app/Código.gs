@@ -160,6 +160,8 @@ function routeAction(p) {
         return { success: true, data: getTenantBootstrap() };
       case "getVisibleFichas":
         return { success: true, data: getVisibleFichas() };
+      case "getFichaReadOnly":
+        return { success: true, data: getFichaReadOnly(p.payload || p) };
       case "getActiveFicha":
         return { success: true, data: getActiveFicha() };
       case "getTreinoSession":
@@ -1158,6 +1160,56 @@ function getVisibleFichas() {
   });
 }
 
+function getFichaReadOnly(payload) {
+  payload = payload || {};
+  var fichaId = String(payload.ficha_id || payload.id || "");
+  if (!fichaId) throw new Error("Identificador da ficha ausente.");
+  var ficha = getVisibleFichas().filter(function (item) {
+    return item.ficha_id === fichaId;
+  })[0];
+  if (!ficha) throw new Error("Esta ficha não está visível para o aluno.");
+  var catalog = tenantCatalogMap();
+  var grouped = {};
+  tenantSheetRows("DB_Prescricao").filter(function (row) {
+    return tenantText(row, "id_ficha") === fichaId;
+  }).sort(function (a, b) {
+    var treinoA = tenantText(a, "id_treino");
+    var treinoB = tenantText(b, "id_treino");
+    if (treinoA !== treinoB) return treinoA < treinoB ? -1 : 1;
+    return Number(tenantValue(a, "ordem_exercicio") || 0) - Number(tenantValue(b, "ordem_exercicio") || 0);
+  }).forEach(function (row) {
+    var treinoId = tenantText(row, "id_treino") || "Treino";
+    if (!grouped[treinoId]) grouped[treinoId] = {
+      id_treino: treinoId,
+      nome_treino: tenantText(row, "nome_treino") || treinoId,
+      exercicios: []
+    };
+    var exerciseId = tenantText(row, "id_exercicio");
+    var catalogItem = catalog[exerciseId] || {};
+    var ciclos = [];
+    for (var cycle = 1; cycle <= 4; cycle++) {
+      ciclos.push({
+        ciclo: cycle,
+        sets: tenantCurrentCycleValue(row, "sets", cycle),
+        reps: tenantCurrentCycleValue(row, "reps", cycle),
+        descanso: tenantCurrentCycleValue(row, "descanso", cycle),
+        zona_rir: tenantCurrentCycleValue(row, "zona_rir", cycle)
+      });
+    }
+    grouped[treinoId].exercicios.push({
+      prescricao_item_id: tenantText(row, "prescricao_item_id"),
+      exercicio_id: exerciseId,
+      nome_exercicio: tenantText(row, "nome_exercicio") || tenantText(catalogItem, "nome_exercicio") || exerciseId,
+      ordem_exercicio: Number(tenantValue(row, "ordem_exercicio") || 0),
+      observacoes: tenantText(row, "observacoes"),
+      ciclos: ciclos
+    });
+  });
+  return {
+    ficha: ficha,
+    treinos: Object.keys(grouped).map(function (id) { return grouped[id]; })
+  };
+}
 function getActiveFicha() {
   var active = getVisibleFichas().filter(function (ficha) {
     var value = String(ficha.estado_uso || "").toLowerCase();

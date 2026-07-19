@@ -253,7 +253,50 @@ var App = {
   renderFichas: function renderFichas() {
     var root = document.getElementById("fichas-list");
     var fichas = this.bootstrap && this.bootstrap.fichas || [];
-    root.innerHTML = fichas.length ? fichas.map(function (ficha) { return '<article class="ficha-card' + (App.activeFicha && ficha.ficha_id === App.activeFicha.ficha_id ? " active-ficha" : "") + '"><h3>' + App.escape(ficha.nome_ficha) + '</h3><p>' + (ficha.ficha_id === (App.activeFicha && App.activeFicha.ficha_id) ? "Ficha ativa" : "Histórico de ficha") + '</p><span>Modo leitura</span></article>'; }).join("") : '<div class="empty-state">Nenhuma ficha visível.</div>';
+    root.innerHTML = fichas.length ? fichas.map(function (ficha, index) {
+      var active = App.activeFicha && ficha.ficha_id === App.activeFicha.ficha_id;
+      return '<article class="ficha-card' + (active ? " active-ficha" : "") + '"><h3>' + App.escape(ficha.nome_ficha) + '</h3><p>' + (active ? "Ficha ativa" : "Histórico de ficha") + '</p><span>Modo leitura</span><button class="secondary-button" type="button" onclick="App.openFichaDetail(' + index + ')">Ver ficha</button></article>';
+    }).join("") : '<div class="empty-state">Nenhuma ficha visível.</div>';
+  },
+  openFichaDetail: function openFichaDetail(index) {
+    var fichas = this.bootstrap && this.bootstrap.fichas || [];
+    var ficha = fichas[index];
+    var self = this;
+    if (!ficha) return this.toast("Ficha não encontrada.");
+    this.modal('<h2>Carregando ficha...</h2>');
+    this.call("getFichaReadOnly", { ficha_id: ficha.ficha_id }).then(function (data) {
+      self.renderFichaDetail(data);
+    }).catch(function (error) {
+      self.closeModal();
+      self.toast(error.message);
+    });
+  },
+  renderFichaDetail: function renderFichaDetail(data) {
+    var ficha = data && data.ficha || {};
+    var treinos = data && data.treinos || [];
+    var html = '<p class="eyebrow">MODO LEITURA</p><h2>' + this.escape(ficha.nome_ficha || "Ficha") + '</h2><p class="muted">Esta visualização não altera sua ficha.</p>';
+    for (var i = 0; i < treinos.length; i++) {
+      var treino = treinos[i];
+      html += '<section class="ficha-readonly"><h3>' + this.escape(treino.nome_treino || treino.id_treino) + '</h3>';
+      for (var j = 0; j < treino.exercicios.length; j++) {
+        var exercicio = treino.exercicios[j];
+        html += '<div class="ficha-exercise"><strong>' + (j + 1) + '. ' + this.escape(exercicio.nome_exercicio) + '</strong>';
+        for (var k = 0; k < exercicio.ciclos.length; k++) html += this.renderFichaCycle(exercicio.ciclos[k]);
+        if (exercicio.observacoes) html += '<p class="muted">' + this.escape(exercicio.observacoes) + '</p>';
+        html += '</div>';
+      }
+      html += '</section>';
+    }
+    if (!treinos.length) html += '<div class="empty-state">Esta ficha ainda não possui exercícios publicados.</div>';
+    this.modal(html);
+  },
+  renderFichaCycle: function renderFichaCycle(ciclo) {
+    var parts = [];
+    if (ciclo.sets !== "" && ciclo.sets !== undefined) parts.push(ciclo.sets + " séries");
+    if (ciclo.reps !== "" && ciclo.reps !== undefined) parts.push(ciclo.reps + " reps");
+    if (ciclo.descanso !== "" && ciclo.descanso !== undefined) parts.push("descanso " + ciclo.descanso);
+    if (ciclo.zona_rir !== "" && ciclo.zona_rir !== undefined) parts.push("RIR alvo " + ciclo.zona_rir);
+    return '<p class="ficha-cycle"><span>Semana ' + ciclo.ciclo + '</span>' + this.escape(parts.join(" · ") || "Sem parâmetros") + '</p>';
   },
   renderHistorico: function renderHistorico() {
     var root = document.getElementById("historico-list");
