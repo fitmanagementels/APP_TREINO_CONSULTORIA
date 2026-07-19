@@ -100,6 +100,19 @@ const tests = [
       assert.match(bodyOf(code, "activateFicha"), /inativa/);
     },
   ],
+
+  [
+    "manager replicates published fichas only to the tenant spreadsheet",
+    function () {
+      ["ensureTenantPublicationSheet", "replicatePublishedFichaToTenant"].forEach(function (name) {
+        assert.match(code, new RegExp("function\\s+" + name + "\\s*\\("));
+      });
+      const replication = bodyOf(code, "replicatePublishedFichaToTenant");
+      assert.match(replication, /spreadsheet_id/);
+      assert.match(replication, /DB_Fichas/);
+      assert.match(replication, /DB_Prescricao/);
+    },
+  ],
   [
     "manager shell provides XSTEAM responsive navigation",
     function () {
