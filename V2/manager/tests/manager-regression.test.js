@@ -71,6 +71,20 @@ const tests = [
       assert.match(code, /wa\.me/);
       assert.match(code, /telefone_e164/);
     },
+  ],
+  [
+    "manager catalog and drafts support RIR zones and catalog versions",
+    function () {
+      assert.match(code, /function\s+listCatalogoExercicios\s*\(/);
+      assert.match(code, /function\s+saveCatalogoExercicio\s*\(/);
+      assert.match(code, /function\s+createFicha\s*\(/);
+      assert.match(code, /function\s+savePrescricaoDraft\s*\(/);
+      assert.match(code, /function\s+getPrescricaoEditorData\s*\(/);
+      assert.match(code, /semana_1_zona_rir/);
+      assert.match(code, /semana_4_zona_rir/);
+      assert.match(code, /versao_catalogo/);
+      assert.match(code, /recalcular_catalogo/);
+    },
   ],];
 
 let failures = 0;
