@@ -123,6 +123,15 @@ const tests = [
       assert.match(replication, /DB_Prescricao_Substitutos/);
     },
   ],
+
+  [
+    "visibility and activation synchronize the tenant fiche states",
+    function () {
+      assert.match(code, /function\s+syncTenantFichaStates\s*\(/);
+      assert.match(code, /function\s+setFichaVisibility[\s\S]*syncTenantFichaStates/);
+      assert.match(code, /function\s+activateFicha[\s\S]*syncTenantFichaStates/);
+    },
+  ],
   [
     "manager shell provides XSTEAM responsive navigation",
     function () {

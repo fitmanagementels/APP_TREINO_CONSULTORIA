@@ -504,6 +504,7 @@ function setFichaVisibility(fichaId, visible) {
   ficha.visibilidade_aluno = visible ? "visivel" : "oculta";
   ficha.updated_at = new Date().toISOString();
   updateManagerRecord("Fichas", fichaLookup.row, ficha);
+  syncTenantFichaStates(ficha.aluno_id);
   return { success: true, ficha: ficha };
 }
 
@@ -525,6 +526,7 @@ function activateFicha(fichaId) {
   ficha.estado_uso = "ativa";
   ficha.updated_at = now;
   updateManagerRecord("Fichas", fichaLookup.row, ficha);
+  syncTenantFichaStates(ficha.aluno_id);
   return { success: true, ficha: ficha };
 }
 
@@ -565,4 +567,24 @@ function replicatePublishedFichaToTenant(publicacaoId) {
   getManagerRecords("Prescricao_Itens").filter(function (item) { return String(item.prescricao_id) === String(publication.record.prescricao_id); }).forEach(function (item) { upsertTenantPublicationRecord(prescriptionSheet, "prescricao_item_id", item.prescricao_item_id, ["prescricao_item_id", "publicacao_id", "id_ficha", "id_treino", "id_exercicio", "ordem_exercicio", "observacoes"], { prescricao_item_id: item.prescricao_item_id, publicacao_id: publication.record.publicacao_id, id_ficha: item.ficha_id, id_treino: item.treino_id, id_exercicio: item.exercicio_id, ordem_exercicio: item.ordem, observacoes: item.observacoes }); });
   getManagerRecords("Prescricao_Substitutos").filter(function (item) { return String(item.ficha_id) === String(ficha.ficha_id); }).forEach(function (item) { upsertTenantPublicationRecord(substituteSheet, "substituto_id", item.substituto_id, ["substituto_id", "prescricao_item_id", "ficha_id", "treino_id", "exercicio_id_substituto", "ordem", "observacao", "ativo"], item); });
   return { success: true, replicated: true, spreadsheet_id: instance.spreadsheet_id };
+}
+
+function syncTenantFichaStates(alunoId) {
+  var instance = getManagerRecords("Instancias").filter(function (item) {
+    return String(item.aluno_id) === String(alunoId) && String(item.spreadsheet_id || "") !== "";
+  })[0];
+  if (!instance) return { success: true, pending_instance: true };
+  var tenant = SpreadsheetApp.openById(instance.spreadsheet_id);
+  var sheet = ensureTenantPublicationSheet(tenant, "DB_Fichas", ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"]);
+  listFichas(alunoId).forEach(function (ficha) {
+    upsertTenantPublicationRecord(sheet, "ficha_id", ficha.ficha_id, ["ficha_id", "nome_ficha", "visibilidade_aluno", "estado_uso", "publicacao_id", "updated_at"], {
+      ficha_id: ficha.ficha_id,
+      nome_ficha: ficha.nome_ficha,
+      visibilidade_aluno: ficha.visibilidade_aluno,
+      estado_uso: ficha.estado_uso,
+      publicacao_id: ficha.publicacao_atual_id,
+      updated_at: new Date().toISOString()
+    });
+  });
+  return { success: true, synced: true };
 }
