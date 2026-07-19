@@ -4,6 +4,24 @@ var ManagerApp = (function () {
   var MUSCLES = [["coef_gluteos", "Glúteos"], ["coef_posterior_coxa", "Posterior"], ["coef_quadriceps", "Quadríceps"], ["coef_panturrilha", "Panturrilha"], ["coef_peitoral", "Peitoral"], ["coef_dorsal", "Dorsal"], ["coef_deltoide_anterior", "Deltoide ant."], ["coef_deltoide_posterior", "Deltoide post."], ["coef_biceps", "Bíceps"], ["coef_triceps", "Tríceps"], ["coef_antebraco", "Antebraço"], ["coef_abdomen", "Abdômen"], ["coef_eretores", "Eretores"]];
 
   function root() { return document.getElementById("app-root"); }
+  var PAGE_LABELS = { alunos: "Alunos", prescricoes: "Prescrições", acompanhamento: "Acompanhamento", saude: "Saúde do App" };
+  function shell() { return document.querySelector(".app-shell"); }
+  function isMobileLayout() { return window.matchMedia("(max-width: 700px)").matches; }
+  function setContextualPage(page) { var label = document.getElementById("contextual-page-label"); if (label) label.textContent = PAGE_LABELS[page] || "Gerenciador"; }
+  function toggleSidebar(forceOpen) {
+    var node = shell(); var button = document.getElementById("sidebar-toggle");
+    if (!node || !button) return;
+    var open = typeof forceOpen === "boolean" ? forceOpen : !node.classList.contains("is-sidebar-expanded");
+    node.classList.toggle("is-sidebar-expanded", open);
+    node.classList.toggle("is-sidebar-compact", !isMobileLayout() && !open);
+    button.setAttribute("aria-expanded", String(open));
+  }
+  function syncSidebarViewport() {
+    var node = shell(); var button = document.getElementById("sidebar-toggle");
+    if (!node || !button) return;
+    if (isMobileLayout()) { node.classList.remove("is-sidebar-compact"); node.classList.remove("is-sidebar-expanded"); button.setAttribute("aria-expanded", "false"); }
+    else if (!node.classList.contains("is-sidebar-expanded")) { node.classList.add("is-sidebar-compact"); button.setAttribute("aria-expanded", "false"); }
+  }
   function esc(value) { return String(value === undefined || value === null ? "" : value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
   function loader(visible) { var node = document.getElementById("global-loader"); if (node) node.style.display = visible ? "flex" : "none"; }
   function selectedAluno() { for (var i = 0; i < state.alunos.length; i += 1) if (String(state.alunos[i].aluno_id) === state.selectedAlunoId) return state.alunos[i]; return null; }
@@ -95,8 +113,28 @@ var ManagerApp = (function () {
   function addItem(event) { event.preventDefault(); var form = event.target; if (!form.exercicio_id.value) return; var item = { exercicio_id: form.exercicio_id.value, treino_id: "treino-principal", nome_treino: form.nome_treino.value || "Treino principal" }; for (var w = 1; w <= 4; w += 1) { item["semana_" + w + "_series"] = form["semana_" + w + "_series"].value; item["semana_" + w + "_repeticoes"] = form["semana_" + w + "_repeticoes"].value; item["semana_" + w + "_descanso_segundos"] = form["semana_" + w + "_descanso_segundos"].value; item["semana_" + w + "_zona_rir"] = form["semana_" + w + "_zona_rir"].value; } state.draftItems.push(item); render(); }
   function saveDraft() { var error = document.getElementById("draft-error"); call("savePrescricaoDraft", { ficha_id: currentFicha().ficha_id, prescricao_id: state.editor.prescricao && state.editor.prescricao.prescricao_id, itens: state.draftItems }, function (response) { if (!response || !response.success) { error.textContent = response && response.error ? response.error : "Não foi possível salvar."; return; } loadFichas(function () { loadEditor(currentFicha().ficha_id, render); }); }, function (response) { error.textContent = response.error; }); }
   function saveCatalog(event) { event.preventDefault(); var form = event.target; var data = { exercicio_id: state.catalogEditingId, nome_exercicio: form.nome_exercicio.value, grupo_muscular: form.grupo_muscular.value, tipo_exercicio: form.tipo_exercicio.value, ativo: form.ativo.value }; for (var i = 0; i < MUSCLES.length; i += 1) data[MUSCLES[i][0]] = form[MUSCLES[i][0]].value; var error = document.getElementById("catalog-error"); call("saveCatalogoExercicio", data, function (response) { if (!response || !response.success) { error.textContent = response && response.error ? response.error : "Não foi possível salvar."; return; } state.catalogEditingId = ""; loadEditor(currentFicha().ficha_id, render); }, function (response) { error.textContent = response.error; }); }
-  function selectPage(page) { state.page = page; var buttons = document.querySelectorAll(".nav-button"); for (var i = 0; i < buttons.length; i += 1) buttons[i].className = buttons[i].getAttribute("data-page") === page ? "nav-button is-active" : "nav-button"; if (page === "prescricoes") loadFichas(render); else render(); }
-  function boot() { var buttons = document.querySelectorAll(".nav-button"); for (var i = 0; i < buttons.length; i += 1) buttons[i].onclick = function () { selectPage(this.getAttribute("data-page")); }; refresh(function () { document.getElementById("connection-status").textContent = window.google && google.script && google.script.run ? "Pronto" : "Prévia local"; render(); loader(false); }); }
+  function selectPage(page) {
+    state.page = page;
+    var buttons = document.querySelectorAll(".nav-button");
+    for (var i = 0; i < buttons.length; i += 1) {
+      var active = buttons[i].getAttribute("data-page") === page;
+      buttons[i].className = active ? "nav-button is-active" : "nav-button";
+      if (active) buttons[i].setAttribute("aria-current", "page"); else buttons[i].removeAttribute("aria-current");
+    }
+    setContextualPage(page);
+    if (isMobileLayout()) toggleSidebar(false);
+    if (page === "prescricoes") loadFichas(render); else render();
+  }
+  function boot() {
+    var sidebarButton = document.getElementById("sidebar-toggle");
+    if (sidebarButton) sidebarButton.onclick = function () { toggleSidebar(); };
+    var buttons = document.querySelectorAll(".nav-button");
+    for (var i = 0; i < buttons.length; i += 1) buttons[i].onclick = function () { selectPage(this.getAttribute("data-page")); };
+    setContextualPage(state.page);
+    syncSidebarViewport();
+    window.addEventListener("resize", syncSidebarViewport);
+    refresh(function () { document.getElementById("connection-status").textContent = window.google && google.script && google.script.run ? "Pronto" : "Prévia local"; render(); loader(false); });
+  }
   return { boot: boot, selectPage: selectPage };
 }());
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ManagerApp.boot); else ManagerApp.boot();

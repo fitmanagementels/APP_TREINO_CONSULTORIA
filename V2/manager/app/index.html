@@ -3,26 +3,38 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0c1715" />
+    <meta name="theme-color" content="#090B09" />
     <title>XSTeam — Gerenciador</title>
     <?!= include('style'); ?>
   </head>
   <body>
     <div id="global-loader" class="global-loader" role="status">Carregando gerenciador...</div>
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">XSTEAM V2</p>
-        <h1>Gerenciador</h1>
+    <div class="app-shell">
+      <aside id="app-sidebar" class="app-sidebar" aria-label="Navegação principal">
+        <div class="sidebar-brand">
+          <span class="brand-mark" aria-hidden="true">X</span>
+          <div class="brand-copy"><strong>XSTEAM</strong><span>GESTÃO</span></div>
+        </div>
+        <nav class="app-nav" aria-label="Módulos do gerenciador">
+          <button type="button" class="nav-button is-active" data-page="alunos" aria-current="page"><span class="nav-icon" aria-hidden="true">●</span><span class="nav-label">Alunos</span></button>
+          <button type="button" class="nav-button" data-page="prescricoes"><span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">Prescrições</span></button>
+          <button type="button" class="nav-button" data-page="acompanhamento"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Acompanhamento</span></button>
+          <button type="button" class="nav-button" data-page="saude"><span class="nav-icon" aria-hidden="true">＋</span><span class="nav-label">Saúde do App</span></button>
+        </nav>
+        <p id="connection-status" class="connection-status">Conectando</p>
+      </aside>
+      <div class="app-stage">
+        <header class="app-header">
+          <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true"><span class="visually-hidden">Alternar navegação</span><span aria-hidden="true">☰</span></button>
+          <div><p class="eyebrow">XSTEAM V2</p><h1>Gerenciador</h1></div>
+        </header>
+        <section id="contextual-bar" class="contextual-bar" aria-label="Contexto da seção">
+          <div><p class="contextual-kicker">MÓDULO ATIVO</p><strong id="contextual-page-label">Alunos</strong></div>
+          <div id="contextual-tabs" class="contextual-tabs" aria-label="Subabas futuras"><span class="contextual-placeholder">Subabas aparecerão aqui</span></div>
+        </section>
+        <main id="app-root" class="app-root" tabindex="-1"></main>
       </div>
-      <p id="connection-status" class="connection-status">Conectando</p>
-    </header>
-    <nav class="app-nav" aria-label="Navegação principal">
-      <button type="button" class="nav-button is-active" data-page="alunos">Alunos</button>
-      <button type="button" class="nav-button" data-page="prescricoes">Prescrições</button>
-      <button type="button" class="nav-button" data-page="acompanhamento">Acompanhamento</button>
-      <button type="button" class="nav-button" data-page="saude">Saúde do App</button>
-    </nav>
-    <main id="app-root" class="app-root" tabindex="-1"></main>
+    </div>
     <?!= include('script'); ?>
   </body>
 </html>

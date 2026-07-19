@@ -6,6 +6,8 @@ const root = path.resolve(__dirname, "..");
 const code = fs.readFileSync(path.join(root, "app", "Codigo.gs"), "utf8");
 const index = fs.readFileSync(path.join(root, "app", "index.html"), "utf8");
 const manifest = fs.readFileSync(path.join(root, "app", "appscript.json"), "utf8");
+const style = fs.readFileSync(path.join(root, "app", "style.html"), "utf8");
+const script = fs.readFileSync(path.join(root, "app", "script.html"), "utf8");
 function bodyOf(source, name) {
   const match = new RegExp("function\\s+" + name + "\\s*\\(").exec(source);
   assert.ok(match, name + " should exist");
@@ -85,7 +87,22 @@ const tests = [
       assert.match(code, /versao_catalogo/);
       assert.match(code, /recalcular_catalogo/);
     },
-  ],];
+  ],
+  [
+    "manager shell provides XSTEAM responsive navigation",
+    function () {
+      assert.match(index, /id="app-sidebar"/);
+      assert.match(index, /id="sidebar-toggle"/);
+      assert.match(index, /id="contextual-bar"/);
+      assert.match(index, /aria-controls="app-sidebar"/);
+      assert.match(style, /#D9FF2F/i);
+      assert.match(style, /@media\s*\(max-width:\s*1023px\)/);
+      assert.match(style, /@media\s*\(max-width:\s*700px\)/);
+      assert.match(script, /function\s+toggleSidebar\s*\(/);
+      assert.match(script, /function\s+setContextualPage\s*\(/);
+    },
+  ],
+];
 
 let failures = 0;
 tests.forEach(function (test) {
