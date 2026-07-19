@@ -100,6 +100,10 @@ const tests = [
       assert.match(style, /@media\s*\(max-width:\s*700px\)/);
       assert.match(script, /function\s+toggleSidebar\s*\(/);
       assert.match(script, /function\s+setContextualPage\s*\(/);
+      ["--type-display", "--type-title", "--type-body", "--type-meta"].forEach(function (token) {
+        assert.match(style, new RegExp(token));
+      });
+      assert.match(style, /\.section-heading h2\s*\{[^}]*font-size:\s*var\(--type-title\)/);
     },
   ],
 ];
