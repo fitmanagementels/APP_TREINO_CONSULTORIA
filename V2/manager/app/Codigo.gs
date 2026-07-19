@@ -39,6 +39,10 @@ function routeManagerAction(payload) {
   if (action === "listFichas") return { success: true, fichas: listFichas(data.aluno_id) };
   if (action === "getPrescricaoEditorData") return getPrescricaoEditorData(data.ficha_id);
   if (action === "savePrescricaoDraft") return savePrescricaoDraft(data);
+  if (action === "queuePublication") return queuePublication(data.ficha_id);
+  if (action === "publishFicha") return publishFicha(data.publicacao_id);
+  if (action === "setFichaVisibility") return setFichaVisibility(data.ficha_id, data.visible);
+  if (action === "activateFicha") return activateFicha(data.ficha_id);
   return { success: false, error: "Ação desconhecida" };
 }
 
@@ -441,4 +445,84 @@ function savePrescricaoDraft(payload) {
   appendManagerRecord("Prescricoes", prescricao);
   for (var rowIndex = 0; rowIndex < rows.length; rowIndex += 1) appendManagerRecord("Prescricao_Itens", rows[rowIndex]);
   return { success: true, prescricao_id: prescricao.prescricao_id, versao: prescricao.versao, demanda_planejada: calculatePlannedDemandPreview(rows, catalog) };
+}
+function queuePublication(fichaId) {
+  var fichaLookup = getRecordWithRow("Fichas", "ficha_id", fichaId);
+  var prescricao = getLatestPrescricao(fichaId);
+  if (!fichaLookup || !prescricao) return { success: false, error: "Ficha ou rascunho não encontrado." };
+  var now = new Date().toISOString();
+  var publication = {
+    publicacao_id: Utilities.getUuid(),
+    ficha_id: fichaLookup.record.ficha_id,
+    aluno_id: fichaLookup.record.aluno_id,
+    prescricao_id: prescricao.prescricao_id,
+    versao_prescricao: prescricao.versao,
+    status: "pendente",
+    created_at: now,
+    updated_at: now
+  };
+  appendManagerRecord("Publicacoes", publication);
+  appendManagerRecord("Fila_Operacoes", {
+    operacao_id: Utilities.getUuid(),
+    tipo: "publicar_ficha",
+    aluno_id: publication.aluno_id,
+    referencia_id: publication.publicacao_id,
+    status: "pendente",
+    tentativas: 0,
+    payload_json: JSON.stringify({ publicacao_id: publication.publicacao_id }),
+    criado_em: now,
+    updated_at: now
+  });
+  return { success: true, publicacao: publication };
+}
+
+function publishFicha(publicacaoId) {
+  var publicationLookup = getRecordWithRow("Publicacoes", "publicacao_id", publicacaoId);
+  if (!publicationLookup) return { success: false, error: "Publicação não encontrada." };
+  var publication = publicationLookup.record;
+  var fichaLookup = getRecordWithRow("Fichas", "ficha_id", publication.ficha_id);
+  if (!fichaLookup) return { success: false, error: "Ficha não encontrada." };
+  if (publication.status === "publicada") return { success: true, publicacao: publication, duplicate: true };
+  var now = new Date().toISOString();
+  publication.status = "publicada";
+  publication.publicado_em = now;
+  publication.updated_at = now;
+  updateManagerRecord("Publicacoes", publicationLookup.row, publication);
+  fichaLookup.record.visibilidade_aluno = "visivel";
+  fichaLookup.record.publicacao_atual_id = publication.publicacao_id;
+  fichaLookup.record.updated_at = now;
+  updateManagerRecord("Fichas", fichaLookup.row, fichaLookup.record);
+  return { success: true, publicacao: publication, ficha: fichaLookup.record };
+}
+
+function setFichaVisibility(fichaId, visible) {
+  var fichaLookup = getRecordWithRow("Fichas", "ficha_id", fichaId);
+  if (!fichaLookup) return { success: false, error: "Ficha não encontrada." };
+  var ficha = fichaLookup.record;
+  if (!visible && String(ficha.estado_uso) === "ativa") return { success: false, error: "Desative a ficha antes de ocultá-la." };
+  ficha.visibilidade_aluno = visible ? "visivel" : "oculta";
+  ficha.updated_at = new Date().toISOString();
+  updateManagerRecord("Fichas", fichaLookup.row, ficha);
+  return { success: true, ficha: ficha };
+}
+
+function activateFicha(fichaId) {
+  var fichaLookup = getRecordWithRow("Fichas", "ficha_id", fichaId);
+  if (!fichaLookup) return { success: false, error: "Ficha não encontrada." };
+  var ficha = fichaLookup.record;
+  if (String(ficha.visibilidade_aluno) !== "visivel") return { success: false, error: "Publique a ficha visivel antes de ativá-la." };
+  var fichas = listFichas(ficha.aluno_id);
+  var now = new Date().toISOString();
+  for (var i = 0; i < fichas.length; i += 1) {
+    if (String(fichas[i].estado_uso) === "ativa") {
+      var previous = getRecordWithRow("Fichas", "ficha_id", fichas[i].ficha_id);
+      previous.record.estado_uso = "inativa";
+      previous.record.updated_at = now;
+      updateManagerRecord("Fichas", previous.row, previous.record);
+    }
+  }
+  ficha.estado_uso = "ativa";
+  ficha.updated_at = now;
+  updateManagerRecord("Fichas", fichaLookup.row, ficha);
+  return { success: true, ficha: ficha };
 }

@@ -89,6 +89,18 @@ const tests = [
     },
   ],
   [
+    "manager publication contract protects visibility and one active fiche",
+    function () {
+      ["queuePublication", "publishFicha", "setFichaVisibility", "activateFicha"].forEach(function (name) {
+        assert.match(code, new RegExp("function\\s+" + name + "\\s*\\("));
+      });
+      assert.match(code, /publicacao_id/);
+      assert.match(code, /status.*pendente/);
+      assert.match(bodyOf(code, "activateFicha"), /visivel/);
+      assert.match(bodyOf(code, "activateFicha"), /inativa/);
+    },
+  ],
+  [
     "manager shell provides XSTEAM responsive navigation",
     function () {
       assert.match(index, /id="app-sidebar"/);
