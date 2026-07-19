@@ -40,8 +40,8 @@
   .catalog-details { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 14px; }.catalog-details summary { color: var(--accent); cursor: pointer; font-weight: bold; }.catalog-content { display: grid; gap: 16px; grid-template-columns: minmax(180px,.55fr) minmax(0,1.45fr); margin-top: 14px; }.catalog-list { display: grid; gap: 7px; max-height: 360px; overflow-y: auto; }.catalog-form { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }.coefficient-grid { display: grid; gap: 8px; grid-column: 1 / -1; grid-template-columns: repeat(3,minmax(0,1fr)); }.coefficient-grid label { color: var(--muted); display: grid; font-size: 11px; gap: 3px; }
   button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline: 3px solid rgba(217,255,47,.72); outline-offset: 3px; }.visually-hidden { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
   .app-shell.is-sidebar-compact .brand-copy,.app-shell.is-sidebar-compact .nav-label,.app-shell.is-sidebar-compact .connection-status { display: none; }.app-shell.is-sidebar-compact .sidebar-brand,.app-shell.is-sidebar-compact .nav-button { justify-content: center; padding-left: 0; padding-right: 0; }
-  .brand-logo { display: block; object-fit: contain; }
-  .brand-logo--full { height: 36px; max-width: 142px; width: 142px; }
+  .brand-logo { display: block; overflow: hidden; } .brand-logo svg { display: block; height: 100%; width: 100%; }
+  .brand-logo--full { height: 36px; width: 142px; }
   .brand-logo--symbol { display: none; height: 34px; width: 34px; }
   .brand-context { color: #b8c0b3; font-size: 9px; font-weight: 700; letter-spacing: .16em; margin-left: 4px; }
   .app-shell.is-sidebar-compact .brand-logo--full,.app-shell.is-sidebar-compact .brand-context { display: none; }
