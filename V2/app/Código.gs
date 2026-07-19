@@ -3,7 +3,9 @@
 // DB_Prescricao: id_ficha|id_treino|id_exercicio|observacoes|ordem_exercicio
 //   semana_1_* ate semana_4_*
 // =====================================================================
-var DEFAULT_SPREADSHEET_ID = "1x4tHTYIr4GKuBqyW_SnoUsQaC9U1PeIgsKdXrXaztG8";
+// Cada instância recebe seu próprio ID em Script Properties (SPREADSHEET_ID).
+// Nunca mantenha aqui o ID de outra planilha/aluno.
+var DEFAULT_SPREADSHEET_ID = "";
 var DEMANDA_MUSCULAR_SHEET = "Demanda_Muscular";
 
 var PRESCRICAO_HEADERS = [
