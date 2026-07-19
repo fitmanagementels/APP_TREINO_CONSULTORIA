@@ -60,6 +60,17 @@ const tests = [
       assert.match(code, /semana_4_zona_rir/);
       assert.doesNotMatch(bodyOf(code, "setupManagerDatabase"), /deleteSheet|clear\s*\(/);
     },
+  ],
+  [
+    "manager profiles validate contact data and provide a WhatsApp action",
+    function () {
+      assert.match(code, /function\s+listAlunos\s*\(/);
+      assert.match(code, /function\s+saveAluno\s*\(/);
+      assert.match(code, /function\s+getAlunoProfile\s*\(/);
+      assert.match(code, /function\s+buildWhatsAppUrl\s*\(/);
+      assert.match(code, /wa\.me/);
+      assert.match(code, /telefone_e164/);
+    },
   ],];
 
 let failures = 0;

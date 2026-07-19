@@ -1,9 +1,13 @@
 <script>
 var ManagerApp = (function () {
-  var state = { page: "alunos", boot: null };
+  var state = { page: "alunos", boot: null, alunos: [], selectedAlunoId: "", search: "", showForm: false, editingAlunoId: "" };
 
-  function getRoot() {
-    return document.getElementById("app-root");
+  function getRoot() { return document.getElementById("app-root"); }
+
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
   function setLoader(visible, text) {
@@ -13,62 +17,149 @@ var ManagerApp = (function () {
     if (text) loader.textContent = text;
   }
 
+  function selectedAluno() {
+    for (var i = 0; i < state.alunos.length; i += 1) {
+      if (String(state.alunos[i].aluno_id) === state.selectedAlunoId) return state.alunos[i];
+    }
+    return null;
+  }
+
+  function filteredAlunos() {
+    var query = state.search.toLowerCase();
+    return state.alunos.filter(function (aluno) {
+      return String(aluno.nome || "").toLowerCase().indexOf(query) !== -1;
+    });
+  }
+
+  function renderEmptyPage(title, message) {
+    return "<section class=\"page-card\"><p class=\"eyebrow\">EM CONSTRUÇÃO</p><h2>" + title + "</h2><p>" + message + "</p></section>";
+  }
+
+  function renderAlunoForm(aluno) {
+    aluno = aluno || {};
+    return "<section class=\"profile-form-card\"><div class=\"section-heading\"><div><p class=\"eyebrow\">" + (aluno.aluno_id ? "EDIÇÃO" : "NOVO ALUNO") + "</p><h2>" + (aluno.aluno_id ? "Editar perfil" : "Cadastrar aluno") + "</h2></div><button type=\"button\" class=\"text-button\" id=\"cancel-profile\">Cancelar</button></div>" +
+      "<form id=\"profile-form\" class=\"profile-form\">" +
+      "<label>Nome<input name=\"nome\" required value=\"" + escapeHtml(aluno.nome) + "\" /></label>" +
+      "<label>Telefone com DDD<input name=\"telefone_e164\" required inputmode=\"tel\" value=\"" + escapeHtml(aluno.telefone_e164) + "\" /></label>" +
+      "<label>Status<select name=\"status\"><option value=\"ativo\"" + (aluno.status === "ativo" || !aluno.status ? " selected" : "") + ">Ativo</option><option value=\"pausado\"" + (aluno.status === "pausado" ? " selected" : "") + ">Pausado</option></select></label>" +
+      "<label class=\"full-width\">Observações de gestão<textarea name=\"observacoes_gestao\" rows=\"3\">" + escapeHtml(aluno.observacoes_gestao) + "</textarea></label>" +
+      "<button type=\"submit\" class=\"primary-button\">Salvar perfil</button><p id=\"profile-form-error\" class=\"form-error\" aria-live=\"polite\"></p>" +
+      "</form></section>";
+  }
+
+  function renderAlunoDetail(aluno) {
+    if (!aluno) return "<aside class=\"profile-detail empty-detail\"><p>Selecione um aluno para ver o perfil, iniciar uma conversa ou editar os dados.</p></aside>";
+    return "<aside class=\"profile-detail\"><p class=\"eyebrow\">PERFIL DO ALUNO</p><h2>" + escapeHtml(aluno.nome) + "</h2><p class=\"status-chip\">" + escapeHtml(aluno.status || "ativo") + "</p><dl><dt>Telefone</dt><dd>+" + escapeHtml(aluno.telefone_e164) + "</dd><dt>Instância</dt><dd>Aguardando provisionamento</dd></dl><div class=\"detail-actions\"><a class=\"primary-button\" target=\"_blank\" rel=\"noopener\" href=\"" + escapeHtml(aluno.whatsapp_url) + "\">Abrir WhatsApp</a><button type=\"button\" class=\"secondary-button\" id=\"edit-profile\">Editar perfil</button></div></aside>";
+  }
+
+  function renderAlunos() {
+    if (state.showForm) return renderAlunoForm(state.editingAlunoId ? selectedAluno() : null);
+    var alunos = filteredAlunos();
+    var items = alunos.map(function (aluno) {
+      var selected = String(aluno.aluno_id) === state.selectedAlunoId ? " is-selected" : "";
+      return "<button type=\"button\" class=\"student-row" + selected + "\" data-aluno-id=\"" + escapeHtml(aluno.aluno_id) + "\"><strong>" + escapeHtml(aluno.nome) + "</strong><span>" + escapeHtml(aluno.status || "ativo") + "</span></button>";
+    }).join("");
+    if (!items) items = "<p class=\"empty-list\">Nenhum aluno encontrado.</p>";
+    return "<section class=\"section-heading\"><div><p class=\"eyebrow\">BASE CENTRAL</p><h2>Alunos</h2><p>Perfis, contato e situação de cada instância single-tenant.</p></div><button type=\"button\" class=\"primary-button\" id=\"new-profile\">Novo aluno</button></section>" +
+      "<section class=\"students-layout\"><div class=\"student-list-card\"><label class=\"search-label\">Buscar aluno<input id=\"aluno-search\" type=\"search\" value=\"" + escapeHtml(state.search) + "\" placeholder=\"Digite um nome\" /></label><div class=\"student-list\">" + items + "</div></div>" + renderAlunoDetail(selectedAluno()) + "</section>";
+  }
+
   function render() {
     var root = getRoot();
     if (!root) return;
-    var content = {
-      alunos: ["Alunos", "Cadastre e acompanhe cada aluno em um só lugar."],
-      prescricoes: ["Prescrições", "Crie rascunhos, revise e prepare fichas para publicação."],
-      acompanhamento: ["Acompanhamento", "Indicadores de execução serão exibidos aqui."],
-      saude: ["Saúde do App", "Erros e sincronizações dos apps dos alunos serão monitorados aqui."]
-    }[state.page];
-    root.innerHTML = "<section class=\"page-card\"><p class=\"eyebrow\">EM CONSTRUÇÃO</p><h2>" + content[0] + "</h2><p>" + content[1] + "</p></section>";
+    if (state.page === "alunos") root.innerHTML = renderAlunos();
+    else if (state.page === "prescricoes") root.innerHTML = renderEmptyPage("Prescrições", "Crie rascunhos, revise e prepare fichas para publicação.");
+    else if (state.page === "acompanhamento") root.innerHTML = renderEmptyPage("Acompanhamento", "Indicadores de execução serão exibidos aqui.");
+    else root.innerHTML = renderEmptyPage("Saúde do App", "Erros e sincronizações dos apps dos alunos serão monitorados aqui.");
+    attachPageEvents();
+  }
+
+  function callServer(action, data, success, failure) {
+    if (!window.google || !google.script || !google.script.run) {
+      if (failure) failure({ error: "A prévia local não salva dados." });
+      return;
+    }
+    google.script.run.withSuccessHandler(success).withFailureHandler(function () {
+      if (failure) failure({ error: "Não foi possível concluir a operação." });
+    }).routeManagerAction({ action: action, data: data || {} });
+  }
+
+  function refreshBootstrap(done) {
+    callServer("getBootstrap", {}, function (response) {
+      if (response && response.success && response.data) {
+        state.boot = response.data;
+        state.alunos = response.data.alunos || [];
+      }
+      if (done) done();
+    }, function () { if (done) done(); });
+  }
+
+  function attachPageEvents() {
+    var newProfile = document.getElementById("new-profile");
+    if (newProfile) newProfile.onclick = function () { state.showForm = true; state.editingAlunoId = ""; render(); };
+    var cancel = document.getElementById("cancel-profile");
+    if (cancel) cancel.onclick = function () { state.showForm = false; render(); };
+    var edit = document.getElementById("edit-profile");
+    if (edit) edit.onclick = function () { state.showForm = true; state.editingAlunoId = state.selectedAlunoId; render(); };
+    var search = document.getElementById("aluno-search");
+    if (search) search.oninput = function () { state.search = this.value; render(); };
+    var rows = document.querySelectorAll(".student-row");
+    for (var i = 0; i < rows.length; i += 1) rows[i].onclick = function () { state.selectedAlunoId = this.getAttribute("data-aluno-id"); render(); };
+    var form = document.getElementById("profile-form");
+    if (form) form.onsubmit = submitProfile;
+  }
+
+  function submitProfile(event) {
+    event.preventDefault();
+    var form = event.target;
+    var error = document.getElementById("profile-form-error");
+    if (error) error.textContent = "Salvando...";
+    callServer("saveAluno", {
+      aluno_id: state.editingAlunoId,
+      nome: form.nome.value,
+      telefone_e164: form.telefone_e164.value,
+      status: form.status.value,
+      observacoes_gestao: form.observacoes_gestao.value
+    }, function (response) {
+      if (!response || !response.success) {
+        if (error) error.textContent = response && response.error ? response.error : "Não foi possível salvar.";
+        return;
+      }
+      state.selectedAlunoId = response.aluno.aluno_id;
+      state.showForm = false;
+      state.editingAlunoId = "";
+      refreshBootstrap(render);
+    }, function (response) { if (error) error.textContent = response.error; });
   }
 
   function selectPage(page) {
     state.page = page;
     var buttons = document.querySelectorAll(".nav-button");
     for (var i = 0; i < buttons.length; i += 1) {
-      var selected = buttons[i].getAttribute("data-page") === page;
-      buttons[i].className = selected ? "nav-button is-active" : "nav-button";
+      buttons[i].className = buttons[i].getAttribute("data-page") === page ? "nav-button is-active" : "nav-button";
     }
     render();
   }
 
   function attachNavigation() {
     var buttons = document.querySelectorAll(".nav-button");
-    for (var i = 0; i < buttons.length; i += 1) {
-      buttons[i].onclick = function () { selectPage(this.getAttribute("data-page")); };
-    }
+    for (var i = 0; i < buttons.length; i += 1) buttons[i].onclick = function () { selectPage(this.getAttribute("data-page")); };
   }
 
   function boot() {
     attachNavigation();
-    render();
-    if (!window.google || !google.script || !google.script.run) {
-      document.getElementById("connection-status").textContent = "Prévia local";
+    refreshBootstrap(function () {
+      var status = document.getElementById("connection-status");
+      if (!window.google || !google.script || !google.script.run) status.textContent = "Prévia local";
+      else status.textContent = "Pronto";
+      render();
       setLoader(false);
-      return;
-    }
-    google.script.run
-      .withSuccessHandler(function (response) {
-        state.boot = response;
-        document.getElementById("connection-status").textContent = "Pronto";
-        setLoader(false);
-      })
-      .withFailureHandler(function () {
-        document.getElementById("connection-status").textContent = "Falha ao conectar";
-        setLoader(false);
-      })
-      .routeManagerAction({ action: "getBootstrap" });
+    });
   }
 
   return { boot: boot, selectPage: selectPage };
 }());
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", ManagerApp.boot);
-} else {
-  ManagerApp.boot();
-}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ManagerApp.boot);
+else ManagerApp.boot();
 </script>

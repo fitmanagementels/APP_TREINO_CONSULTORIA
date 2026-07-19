@@ -27,8 +27,12 @@ function include(filename) {
 
 function routeManagerAction(payload) {
   var action = payload && payload.action ? String(payload.action) : "";
+  var data = payload && payload.data ? payload.data : payload || {};
   if (action === "getBootstrap") return getManagerBootstrap();
   if (action === "setupDatabase") return setupManagerDatabase();
+  if (action === "listAlunos") return { success: true, alunos: listAlunos() };
+  if (action === "saveAluno") return saveAluno(data);
+  if (action === "getAlunoProfile") return getAlunoProfile(data.aluno_id);
   return { success: false, error: "Ação desconhecida" };
 }
 
@@ -37,7 +41,8 @@ function getManagerBootstrap() {
     success: true,
     data: {
       appName: "XSTeam Gerenciador",
-      pages: ["alunos", "prescricoes", "acompanhamento", "saude"]
+      pages: ["alunos", "prescricoes", "acompanhamento", "saude"],
+      alunos: listAlunos()
     }
   };
 }
@@ -76,4 +81,146 @@ function ensureManagerSheet(ss, name, headers) {
     sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
   }
   return { name: name, created: created, missingHeaders: missingHeaders };
+}
+function getManagerSheetDefinition(name) {
+  for (var i = 0; i < MANAGER_SHEETS.length; i += 1) {
+    if (MANAGER_SHEETS[i].name === name) return MANAGER_SHEETS[i];
+  }
+  throw new Error("Aba central não reconhecida: " + name);
+}
+
+function getManagerSheet(name) {
+  var ss = getManagerSpreadsheet();
+  var definition = getManagerSheetDefinition(name);
+  ensureManagerSheet(ss, definition.name, definition.headers);
+  return ss.getSheetByName(definition.name);
+}
+
+function objectFromRow(headers, row) {
+  var result = {};
+  for (var i = 0; i < headers.length; i += 1) result[headers[i]] = row[i] === undefined ? "" : row[i];
+  return result;
+}
+
+function getManagerRecords(name) {
+  var sheet = getManagerSheet(name);
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return [];
+  var values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+  var records = [];
+  for (var i = 1; i < values.length; i += 1) records.push(objectFromRow(values[0], values[i]));
+  return records;
+}
+
+function makeManagerRow(headers, record) {
+  var row = [];
+  for (var i = 0; i < headers.length; i += 1) row.push(record[headers[i]] === undefined ? "" : record[headers[i]]);
+  return row;
+}
+
+function normalizePhoneE164(phone) {
+  var digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length === 10 || digits.length === 11) digits = "55" + digits;
+  if (!/^55\d{10,11}$/.test(digits)) throw new Error("Informe um telefone brasileiro válido com DDD.");
+  return digits;
+}
+
+function buildWhatsAppUrl(phone, message) {
+  var normalized = normalizePhoneE164(phone);
+  var url = "https://wa.me/" + normalized;
+  return message ? url + "?text=" + encodeURIComponent(String(message)) : url;
+}
+
+function listAlunos() {
+  var alunos = getManagerRecords("Alunos");
+  for (var i = 0; i < alunos.length; i += 1) {
+    alunos[i].whatsapp_url = buildWhatsAppUrl(alunos[i].telefone_e164);
+  }
+  alunos.sort(function (a, b) {
+    return String(a.nome).toLowerCase() > String(b.nome).toLowerCase() ? 1 : -1;
+  });
+  return alunos;
+}
+
+function getAlunoProfile(alunoId) {
+  var alunoIdText = String(alunoId || "");
+  var alunos = listAlunos();
+  var aluno = null;
+  for (var i = 0; i < alunos.length; i += 1) {
+    if (String(alunos[i].aluno_id) === alunoIdText) {
+      aluno = alunos[i];
+      break;
+    }
+  }
+  if (!aluno) return { success: false, error: "Aluno não encontrado" };
+  var instances = getManagerRecords("Instancias");
+  var instancia = null;
+  for (var j = 0; j < instances.length; j += 1) {
+    if (String(instances[j].aluno_id) === alunoIdText) {
+      instancia = instances[j];
+      break;
+    }
+  }
+  return { success: true, aluno: aluno, instancia: instancia };
+}
+
+function saveAluno(payload) {
+  var data = payload || {};
+  var nome = String(data.nome || "").trim();
+  if (!nome) return { success: false, error: "Informe o nome do aluno." };
+  var telefone;
+  try {
+    telefone = normalizePhoneE164(data.telefone_e164);
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return { success: false, error: "Não foi possível salvar agora. Tente novamente." };
+  try {
+    var alunosSheet = getManagerSheet("Alunos");
+    var definition = getManagerSheetDefinition("Alunos");
+    var now = new Date().toISOString();
+    var alunoId = String(data.aluno_id || "");
+    var existingRow = 0;
+    if (alunoId) {
+      var alunoRows = getManagerRecords("Alunos");
+      for (var i = 0; i < alunoRows.length; i += 1) {
+        if (String(alunoRows[i].aluno_id) === alunoId) {
+          existingRow = i + 2;
+          break;
+        }
+      }
+      if (!existingRow) return { success: false, error: "Aluno não encontrado para atualização." };
+    } else {
+      alunoId = Utilities.getUuid();
+    }
+
+    var record = {
+      aluno_id: alunoId,
+      nome: nome,
+      telefone_e164: telefone,
+      status: String(data.status || "ativo"),
+      observacoes_gestao: String(data.observacoes_gestao || ""),
+      created_at: existingRow ? getManagerRecords("Alunos")[existingRow - 2].created_at : now,
+      updated_at: now
+    };
+    if (existingRow) {
+      alunosSheet.getRange(existingRow, 1, 1, definition.headers.length).setValues([makeManagerRow(definition.headers, record)]);
+    } else {
+      alunosSheet.appendRow(makeManagerRow(definition.headers, record));
+      var instanceDefinition = getManagerSheetDefinition("Instancias");
+      getManagerSheet("Instancias").appendRow(makeManagerRow(instanceDefinition.headers, {
+        instancia_id: Utilities.getUuid(),
+        aluno_id: alunoId,
+        status_provisionamento: "nao_provisionada",
+        created_at: now,
+        updated_at: now
+      }));
+    }
+    return { success: true, aluno: { aluno_id: alunoId, nome: nome, telefone_e164: telefone, status: record.status } };
+  } finally {
+    lock.releaseLock();
+  }
 }

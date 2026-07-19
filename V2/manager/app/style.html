@@ -16,4 +16,27 @@
   .page-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 10px 25px rgba(16, 33, 29, .05); padding: 24px; }
   .page-card p:last-child { color: var(--muted); line-height: 1.5; margin-top: 10px; }
   @media (max-width: 560px) { .app-header { align-items: start; flex-direction: column; gap: 10px; } }
-</style>
+
+  .section-heading { align-items: end; display: flex; justify-content: space-between; margin: 4px 0 18px; gap: 16px; }
+  .section-heading p:last-child { color: var(--muted); margin-top: 6px; }
+  .primary-button, .secondary-button, .text-button { border-radius: 10px; cursor: pointer; font: inherit; padding: 10px 14px; text-decoration: none; }
+  .primary-button { background: var(--accent); border: 1px solid var(--accent); color: #fff; display: inline-block; }
+  .secondary-button { background: #fff; border: 1px solid var(--line); color: var(--ink); }
+  .text-button { background: transparent; border: 0; color: var(--accent); }
+  .students-layout { display: grid; gap: 18px; grid-template-columns: minmax(0, 1.1fr) minmax(260px, .9fr); }
+  .student-list-card, .profile-detail, .profile-form-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+  .search-label, .profile-form label { color: var(--muted); display: grid; font-size: 13px; gap: 6px; }
+  input, select, textarea { background: #fff; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); font: inherit; padding: 10px; width: 100%; }
+  .student-list { display: grid; gap: 8px; margin-top: 14px; }
+  .student-row { align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); cursor: pointer; display: flex; justify-content: space-between; padding: 12px; text-align: left; }
+  .student-row.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(29, 115, 88, .12); }
+  .student-row span, .status-chip { color: var(--muted); font-size: 12px; }
+  .profile-detail dl { display: grid; gap: 4px; margin: 22px 0; }
+  .profile-detail dt { color: var(--muted); font-size: 12px; }
+  .profile-detail dd { margin: 0 0 10px; }
+  .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .profile-form { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; margin-top: 18px; }
+  .profile-form .full-width { grid-column: 1 / -1; }
+  .form-error { color: #a02e2e; font-size: 13px; grid-column: 1 / -1; }
+  .empty-list, .empty-detail { color: var(--muted); }
+  @media (max-width: 700px) { .students-layout, .profile-form { grid-template-columns: 1fr; } .section-heading { align-items: start; flex-direction: column; } }</style>
