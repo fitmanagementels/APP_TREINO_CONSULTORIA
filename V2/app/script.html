@@ -118,7 +118,7 @@ var App = {
     var series = "";
     for (var i = 0; i < item.series.length; i++) {
       var row = item.series[i];
-      series += '<div class="series-row"><span>S' + (i + 1) + '</span><input inputmode="decimal" placeholder="Carga" value="' + this.escape(row.carga_absoluta) + '" onchange="App.updateSeries(' + index + ',' + i + ',0,this.value)"><input inputmode="numeric" placeholder="Reps" value="' + this.escape(row.reps_executadas) + '" onchange="App.updateSeries(' + index + ',' + i + ',1,this.value)"><select onchange="App.updateSeries(' + index + ',' + i + ',2,this.value)">' + this.rirOptions(row.rir) + "</select></div>";
+      series += '<div class="series-row"><span>S' + (i + 1) + '</span><input inputmode="decimal" placeholder="Carga" value="' + this.escape(row.carga_absoluta) + '" onchange="App.updateSeries(' + index + ',' + i + ',0,this.value)"><input inputmode="numeric" placeholder="Reps" value="' + this.escape(row.reps_executadas) + '" onchange="App.updateSeries(' + index + ',' + i + ',1,this.value)"><select onchange="App.updateRirSelect(' + index + ',' + i + ',this)">' + this.rirOptions(row.rir) + '</select><input class="rir-range" type="range" min="0" max="12" step="1" value="' + this.rirIndex(row.rir) + '" oninput="App.updateRirFromRange(' + index + ',' + i + ',this)"></div>';
     }
     return '<article class="exercise-card"><div class="exercise-title"><div><h3>' + this.escape(item.nome_exercicio) + '</h3>' + tags + '<p>' + this.escape(String(item.sets || "") + " × " + String(item.reps || "")) + ' · RIR alvo: ' + this.escape(item.zona_rir || "-") + '</p></div><button class="icon-button" type="button" onclick="App.openSubstituteModal(' + index + ')" aria-label="Substitutos">⇄</button></div><div class="series-head"><span>Série</span><span>Carga</span><span>Reps</span><span>RIR</span></div>' + series + '<div class="card-actions"><button type="button" onclick="App.removeFromSession(' + index + ')">Remover da sessão</button><button type="button" onclick="App.openPreviousModal(' + index + ')">Referência</button></div></article>';
   },
@@ -127,7 +127,24 @@ var App = {
     for (var i = 0; i < this.RIR_OPTIONS.length; i++) html += '<option value="' + this.RIR_OPTIONS[i] + '"' + (String(selected) === this.RIR_OPTIONS[i] ? " selected" : "") + ">" + this.RIR_OPTIONS[i] + "</option>";
     return html;
   },
-  updateSeries: function updateSeries(exerciseIndex, seriesIndex, field, value) {
+  rirIndex: function rirIndex(value) {
+    var index = this.RIR_OPTIONS.indexOf(String(value));
+    return index < 0 ? 0 : index;
+  },
+  updateRirSelect: function updateRirSelect(exerciseIndex, seriesIndex, element) {
+    var value = element.value;
+    this.currentSession.exercicios[exerciseIndex].series[seriesIndex].rir = value;
+    var range = element.parentNode.querySelector(".rir-range");
+    if (range) range.value = this.rirIndex(value);
+    this.saveSessionDraft();
+  },
+  updateRirFromRange: function updateRirFromRange(exerciseIndex, seriesIndex, element) {
+    var value = this.RIR_OPTIONS[Number(element.value)] || "-";
+    this.currentSession.exercicios[exerciseIndex].series[seriesIndex].rir = value;
+    var select = element.parentNode.querySelector("select");
+    if (select) select.value = value;
+    this.saveSessionDraft();
+  },  updateSeries: function updateSeries(exerciseIndex, seriesIndex, field, value) {
     var fields = ["carga_absoluta", "reps_executadas", "rir"];
     this.currentSession.exercicios[exerciseIndex].series[seriesIndex][fields[field]] = value;
     this.saveSessionDraft();

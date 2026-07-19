@@ -20,6 +20,12 @@ const tests = [
     [".history-button", ".history-detail-exercise", ".ficha-readonly", ".ficha-exercise"].forEach((selector) => assert.match(style, new RegExp(selector.replace(".", "\\."))));
   }],
 
+  ["each RIR selector has a synchronized colored slider", () => {
+    ["updateRirFromRange", "updateRirSelect", "rirIndex"].forEach((name) => assert.match(script, new RegExp(name + "\\s*[(:]")));
+    assert.match(script, /class="rir-range"/);
+    assert.match(style, /\.rir-range/);
+  }],
+
   ["PSE and RIR controls use a compact intensity scale", () => {
     assert.match(script, /pse-range/);
     assert.match(script, /RIR_OPTIONS/);
