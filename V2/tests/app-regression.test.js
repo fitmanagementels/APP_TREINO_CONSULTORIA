@@ -66,6 +66,12 @@ const tests = [
     assert.doesNotMatch(script, /\?\.|=>|\bconst\b|\blet\b|`/);
     assert.doesNotMatch(code, /,\s*[\]\})]/);
   }],
+
+  ["empty tenant sheets place headers in column A", () => {
+    const headers = bodyOf(code, "ensureHeaders");
+    assert.match(headers, /hasExistingHeaders/);
+    assert.match(headers, /setValues\(\[expectedHeaders\]\)/);
+  }],
   ["knowledge hub retains portable project status", () => {
     ["Status atual", "Próxima ação", "Contexto para outro chat ou IA"].forEach((label) => assert.match(docsViewer, new RegExp(label)));
   }]

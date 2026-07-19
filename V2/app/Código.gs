@@ -865,13 +865,22 @@ function ensureManagedSheet(ss, name, headers) {
 }
 
 function ensureHeaders(sheet, expectedHeaders) {
-  var lastColumn = Math.max(sheet.getLastColumn(), expectedHeaders.length, 1);
+  var lastColumn = Math.max(sheet.getLastColumn(), 1);
   var currentHeaders = sheet
     .getRange(1, 1, 1, lastColumn)
     .getValues()[0]
     .map(function (h) {
       return String(h).trim();
     });
+  var hasExistingHeaders = currentHeaders.some(function (header) {
+    return header !== "";
+  });
+
+  if (!hasExistingHeaders) {
+    sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+    return;
+  }
+
   var currentLower = currentHeaders.map(function (h) {
     return h.toLowerCase();
   });
@@ -885,6 +894,50 @@ function ensureHeaders(sheet, expectedHeaders) {
       nextColumn++;
     }
   });
+}
+
+function repairTenantDatabaseLayout() {
+  var ss = getSpreadsheet();
+  var repaired = [];
+  var skipped = [];
+
+  Object.keys(MANAGED_SHEETS).forEach(function (sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var lastColumn = Math.max(sheet.getLastColumn(), 1);
+    var headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+    var firstHeaderIndex = -1;
+
+    for (var i = 0; i < headers.length; i++) {
+      if (String(headers[i] || "").trim() !== "") {
+        firstHeaderIndex = i;
+        break;
+      }
+    }
+
+    if (firstHeaderIndex <= 0) return;
+    var hasRows = sheet.getLastRow() > 1 && sheet
+      .getRange(2, 1, sheet.getLastRow() - 1, lastColumn)
+      .getValues()
+      .some(function (row) {
+        return row.some(function (value) {
+          return String(value || "").trim() !== "";
+        });
+      });
+
+    if (hasRows) {
+      skipped.push(sheetName);
+      return;
+    }
+
+    sheet.clear();
+    sheet.getRange(1, 1, 1, MANAGED_SHEETS[sheetName].length)
+      .setValues([MANAGED_SHEETS[sheetName]]);
+    formatHeader(sheet, MANAGED_SHEETS[sheetName].length);
+    repaired.push(sheetName);
+  });
+
+  return { repaired: repaired, skipped: skipped };
 }
 
 function formatHeader(sheet, minColumns) {
