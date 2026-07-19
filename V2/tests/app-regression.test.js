@@ -38,7 +38,10 @@ const tests = [
     const detail = script.slice(script.indexOf("renderFichaDetail:"), script.indexOf("renderHistorico:"));
     assert.doesNotMatch(detail, /startTraining/);
   }],
-  ["student navigation has only the four approved areas", () => {
+  ["history cards open a compact execution detail without extra server calls", () => {
+    ["openHistoricoDetail", "renderHistoricoDetail"].forEach((name) => assert.match(script, new RegExp(name + "\\s*[(:]")));
+    ["carga_absoluta", "reps_executadas", "rir", "PSE"].forEach((token) => assert.match(script, new RegExp(token)));
+  }],  ["student navigation has only the four approved areas", () => {
     ["Treino", "Fichas", "Histórico", "Progresso"].forEach((label) => assert.match(index, new RegExp(label)));
     assert.doesNotMatch(index, />Prescrever</);
     assert.doesNotMatch(index, />Carga</);
@@ -68,7 +71,11 @@ const tests = [
     assert.match(calculation, /rir/);
     assert.match(calculation, /6\+/);
   }],
-  ["frontend remains conservative for Apps Script webviews", () => {
+  ["progress reports frequency, volume and best e1RM per exercise", () => {
+    const progress = bodyOf(code, "getProgressData");
+    ["frequencia_semanal", "volume_total", "tenantCatalogMap", "bestBySession"].forEach((token) => assert.match(progress, new RegExp(token)));
+    ["data.frequencia_semanal", "data.volume_total"].forEach((token) => assert.match(script, new RegExp(token.replace(".", "\\."))));
+  }],  ["frontend remains conservative for Apps Script webviews", () => {
     assert.doesNotMatch(script, /\?\.|=>|\bconst\b|\blet\b|`/);
     assert.doesNotMatch(code, /,\s*[\]\})]/);
   }],

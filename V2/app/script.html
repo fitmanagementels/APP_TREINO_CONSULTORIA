@@ -301,17 +301,49 @@ var App = {
   renderHistorico: function renderHistorico() {
     var root = document.getElementById("historico-list");
     var sessions = this.bootstrap && this.bootstrap.historico || [];
-    root.innerHTML = sessions.length ? sessions.map(function (session) { return '<article class="history-card"><p>' + App.escape(new Date(session.data_treino).toLocaleDateString("pt-BR")) + '</p><h3>Treino finalizado</h3><span>' + session.total_exercicios + " exercícios · " + session.total_series + ' séries</span><strong>' + Math.round(session.volume_total / 100) / 10 + "k</strong><small>PSE " + App.escape(session.pse || "-") + "</small></article>"; }).join("") : '<div class="empty-state">Os treinos finalizados aparecerão aqui.</div>';
+    root.innerHTML = sessions.length ? sessions.map(function (session, index) {
+      return '<button class="history-card history-button" type="button" onclick="App.openHistoricoDetail(' + index + ')"><p>' + App.escape(new Date(session.data_treino).toLocaleDateString("pt-BR")) + '</p><h3>Treino finalizado</h3><span>' + session.total_exercicios + " exercícios · " + session.total_series + ' séries</span><strong>' + Math.round(session.volume_total / 100) / 10 + "k</strong><small>PSE " + App.escape(session.pse || "-") + "</small></button>";
+    }).join("") : '<div class="empty-state">Os treinos finalizados aparecerão aqui.</div>';
   },
-  loadProgress: function loadProgress(period) {
+  openHistoricoDetail: function openHistoricoDetail(index) {
+    var sessions = this.bootstrap && this.bootstrap.historico || [];
+    if (!sessions[index]) return this.toast("Treino não encontrado.");
+    this.renderHistoricoDetail(sessions[index]);
+  },
+  renderHistoricoDetail: function renderHistoricoDetail(session) {
+    var byExercise = {};
+    var records = session.records || [];
+    for (var i = 0; i < records.length; i++) {
+      var record = records[i];
+      var key = record.id_exercicio || "exercicio_" + i;
+      if (!byExercise[key]) byExercise[key] = { nome: record.nome_exercicio || key, series: [] };
+      byExercise[key].series.push(record);
+    }
+    var volume = Math.round(session.volume_total / 100) / 10 + "k";
+    var html = '<h2>Treino: ' + this.escape(new Date(session.data_treino).toLocaleDateString("pt-BR")) + '</h2><div class="metric-grid"><div><span>Volume</span><strong>' + volume + '</strong></div><div><span>PSE</span><strong>' + this.escape(session.pse || "-") + '</strong></div><div><span>Exercícios</span><strong>' + session.total_exercicios + '</strong></div><div><span>Séries</span><strong>' + session.total_series + '</strong></div></div><h3>Exercícios realizados</h3>';
+    Object.keys(byExercise).forEach(function (id) {
+      var exercise = byExercise[id];
+      html += '<section class="history-detail-exercise"><strong>' + App.escape(exercise.nome) + '</strong>';
+      for (var j = 0; j < exercise.series.length; j++) {
+        var row = exercise.series[j];
+        var load = row.carga_absoluta === "" || row.carga_absoluta === undefined ? "-" : row.carga_absoluta + " kg";
+        var reps = row.reps_executadas === "" || row.reps_executadas === undefined ? "-" : row.reps_executadas;
+        html += '<p><span>Série ' + App.escape(row.serie || j + 1) + '</span><b>' + App.escape(load) + " × " + App.escape(reps) + ' (RIR: ' + App.escape(row.rir || "-") + ')</b></p>';
+      }
+      html += '</section>';
+    });
+    this.modal(html);
+  },  loadProgress: function loadProgress(period) {
     var self = this;
     var root = document.getElementById("progresso-content");
+    var buttons = document.querySelectorAll("[data-period]");
+    for (var buttonIndex = 0; buttonIndex < buttons.length; buttonIndex++) buttons[buttonIndex].classList.toggle("selected", String(buttons[buttonIndex].getAttribute("data-period")) === String(period));
     this.call("getProgressData", { periodo: period }).then(function (data) {
       var list = data.e1rm_por_exercicio || [];
-      root.innerHTML = '<div class="metric-grid"><div><span>Frequência</span><strong>' + data.sessoes + ' sessões</strong></div><div><span>Volume</span><strong>Em evolução</strong></div></div><h3>e1RM por exercício</h3>' + (list.length ? list.map(function (item) { var last = item.pontos[item.pontos.length - 1]; return '<div class="progress-line"><span>' + App.escape(item.exercicio_id) + '</span><strong>' + Math.round(last.e1rm) + " kg</strong></div>"; }).join("") : '<p class="muted">O e1RM aparece quando houver carga, repetições e RIR entre 0 e 5.</p>');
+      var volume = Math.round(Number(data.volume_total || 0) / 100) / 10 + "k";
+      root.innerHTML = '<div class="metric-grid"><div><span>Frequência</span><strong>' + App.escape(data.frequencia_semanal) + ' sessões/sem</strong></div><div><span>Volume total</span><strong>' + App.escape(volume) + '</strong></div></div><p class="muted">' + App.escape(data.sessoes) + ' sessões no período</p><h3>Evolução por exercício</h3>' + (list.length ? list.map(function (item) { var last = item.pontos[item.pontos.length - 1]; return '<div class="progress-line"><span>' + App.escape(item.nome_exercicio) + '</span><strong>' + Math.round(last.e1rm) + " kg</strong></div>"; }).join("") : '<p class="muted">O e1RM aparece quando houver carga, repetições e RIR entre 0 e 5.</p>');
     }).catch(function () { root.innerHTML = '<div class="empty-state">Não foi possível carregar o progresso agora.</div>'; });
-  },
-  modal: function modal(html) { document.getElementById("modal-root").innerHTML = '<div class="modal-backdrop"><div class="modal-card"><button class="modal-close" type="button" onclick="App.closeModal()">×</button>' + html + "</div></div>"; },
+  },  modal: function modal(html) { document.getElementById("modal-root").innerHTML = '<div class="modal-backdrop"><div class="modal-card"><button class="modal-close" type="button" onclick="App.closeModal()">×</button>' + html + "</div></div>"; },
   closeModal: function closeModal() { document.getElementById("modal-root").innerHTML = ""; },
   setSync: function setSync(text) { document.getElementById("sync-state").textContent = text; },
   toast: function toast(message) { var node = document.getElementById("toast"); node.textContent = message; node.classList.add("show"); setTimeout(function () { node.classList.remove("show"); }, 3500); },

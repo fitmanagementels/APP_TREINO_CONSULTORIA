@@ -1221,6 +1221,7 @@ function getActiveFicha() {
 
 function getTenantHistorico() {
   var rows = tenantSheetRows("DB_Execucao");
+  var catalog = tenantCatalogMap();
   var sessions = {};
   rows.forEach(function (row) {
     var state = tenantText(row, "estado_execucao").toLowerCase();
@@ -1242,6 +1243,8 @@ function getTenantHistorico() {
     }
     var session = sessions[sessionId];
     var exerciseId = tenantText(row, "id_exercicio");
+    var catalogItem = catalog[exerciseId] || {};
+    row.nome_exercicio = tenantText(row, "nome_exercicio") || tenantText(catalogItem, "nome_exercicio") || exerciseId;
     session.total_series++;
     session.exercicios[exerciseId] = true;
     session.volume_total += Number(tenantValue(row, "carga_absoluta") || 0) * Number(tenantValue(row, "reps_executadas") || 0);
@@ -1472,14 +1475,34 @@ function calculateBrzyckiE1rm(carga, repeticoes, rir) {
 
 function getProgressData(payload) {
   payload = payload || {};
+  var period = payload.periodo || "8";
+  var requestedWeeks = period === "all" ? null : Number(period);
+  if (requestedWeeks !== null && (!isFinite(requestedWeeks) || requestedWeeks <= 0)) requestedWeeks = 8;
+  var now = new Date();
+  var cutoff = null;
+  if (requestedWeeks !== null) {
+    cutoff = new Date(now.getTime());
+    cutoff.setDate(cutoff.getDate() - requestedWeeks * 7);
+  }
+  var catalog = tenantCatalogMap();
   var rows = tenantSheetRows("DB_Execucao").filter(function (row) {
-    return tenantText(row, "estado_execucao") === "realizado";
+    if (tenantText(row, "estado_execucao") !== "realizado") return false;
+    if (!cutoff) return true;
+    var date = new Date(tenantValue(row, "data_treino"));
+    return !isNaN(date.getTime()) && date >= cutoff;
   });
   var bySession = {};
   var byExercise = {};
   rows.forEach(function (row) {
     var sessionId = tenantText(row, "id_sessao");
-    if (!bySession[sessionId]) bySession[sessionId] = row;
+    if (!sessionId) return;
+    if (!bySession[sessionId]) {
+      bySession[sessionId] = {
+        data_treino: tenantValue(row, "data_treino"),
+        volume_total: 0
+      };
+    }
+    bySession[sessionId].volume_total += Number(tenantValue(row, "carga_absoluta") || 0) * Number(tenantValue(row, "reps_executadas") || 0);
     var exerciseId = tenantText(row, "id_exercicio");
     var e1rm = calculateBrzyckiE1rm(tenantValue(row, "carga_absoluta"), tenantValue(row, "reps_executadas"), tenantValue(row, "rir"));
     if (e1rm !== null) {
@@ -1487,12 +1510,34 @@ function getProgressData(payload) {
       byExercise[exerciseId].push({ data: tenantValue(row, "data_treino"), e1rm: e1rm, sessao_id: sessionId });
     }
   });
+  var sessionIds = Object.keys(bySession);
+  var observedWeeks = requestedWeeks || 1;
+  if (requestedWeeks === null && sessionIds.length) {
+    var oldest = now.getTime();
+    sessionIds.forEach(function (id) {
+      var date = new Date(bySession[id].data_treino).getTime();
+      if (!isNaN(date) && date < oldest) oldest = date;
+    });
+    observedWeeks = Math.max(1, Math.ceil((now.getTime() - oldest) / (7 * 24 * 60 * 60 * 1000)));
+  }
+  var volumeTotal = 0;
+  sessionIds.forEach(function (id) { volumeTotal += bySession[id].volume_total; });
   var series = Object.keys(byExercise).map(function (exerciseId) {
     var bestBySession = {};
     byExercise[exerciseId].forEach(function (point) {
       if (!bestBySession[point.sessao_id] || point.e1rm > bestBySession[point.sessao_id].e1rm) bestBySession[point.sessao_id] = point;
     });
-    return { exercicio_id: exerciseId, pontos: Object.keys(bestBySession).map(function (id) { return bestBySession[id]; }) };
-  });
-  return { sessoes: Object.keys(bySession).length, e1rm_por_exercicio: series };
+    var points = Object.keys(bestBySession).map(function (id) { return bestBySession[id]; }).sort(function (a, b) {
+      return new Date(a.data).getTime() - new Date(b.data).getTime();
+    });
+    var catalogItem = catalog[exerciseId] || {};
+    return { exercicio_id: exerciseId, nome_exercicio: tenantText(catalogItem, "nome_exercicio") || exerciseId, pontos: points };
+  }).sort(function (a, b) { return a.nome_exercicio < b.nome_exercicio ? -1 : 1; });
+  return {
+    sessoes: sessionIds.length,
+    frequencia_semanal: Math.round((sessionIds.length / observedWeeks) * 10) / 10,
+    volume_total: volumeTotal,
+    periodo: period,
+    e1rm_por_exercicio: series
+  };
 }

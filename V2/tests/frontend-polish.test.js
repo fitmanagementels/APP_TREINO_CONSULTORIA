@@ -16,6 +16,10 @@ const tests = [
     [".student-nav", ".exercise-card", ".history-card", ".modal-backdrop"].forEach((selector) => assert.match(style, new RegExp(selector.replace(".", "\\."))));
     assert.match(style, /max-width:560px/);
   }],
+  ["read-only fiche and history details remain touch-friendly", () => {
+    [".history-button", ".history-detail-exercise", ".ficha-readonly", ".ficha-exercise"].forEach((selector) => assert.match(style, new RegExp(selector.replace(".", "\\."))));
+  }],
+
   ["PSE and RIR controls use a compact intensity scale", () => {
     assert.match(script, /pse-range/);
     assert.match(script, /RIR_OPTIONS/);
