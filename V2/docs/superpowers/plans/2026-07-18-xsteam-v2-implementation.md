@@ -1,6 +1,6 @@
 # XSTeam V2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Construir a V2 do XSTeam com um PWA Gerenciador central e PWAs single-tenant atualizáveis para cada aluno, preservando a V1 intacta.
 
@@ -64,7 +64,7 @@
 - Produces `doGet(e)`, `routeManagerAction(payload)`, `getManagerBootstrap()` and `setupManagerDatabase()`.
 - Consumes `google.script.run` from `index.html` and `script.html`.
 
-- [ ] **Step 1: Write a failing static regression test for the manager entry points.**
+- [x] **Step 1: Write a failing static regression test for the manager entry points.**
 
 ```js
 assert.match(code, /function\s+doGet\s*\(/);
@@ -75,13 +75,13 @@ assert.match(manifest, /"executeAs"\s*:\s*"USER_DEPLOYING"/);
 assert.match(manifest, /"access"\s*:\s*"MYSELF"/);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails.**
+- [x] **Step 2: Run the test to verify it fails.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: Node fails because `V2/manager/app/Codigo.gs` does not yet exist.
 
-- [ ] **Step 3: Add the minimum Apps Script shell.**
+- [x] **Step 3: Add the minimum Apps Script shell.**
 
 Implement these exact backend action names:
 
@@ -94,17 +94,17 @@ function setupManagerDatabase() { /* create missing central tabs only */ }
 
 The initial `routeManagerAction` accepts only `getBootstrap` and `setupDatabase`; unknown actions return `{ success: false, error: "Ação desconhecida" }`.
 
-- [ ] **Step 4: Add the HTML shell.**
+- [x] **Step 4: Add the HTML shell.**
 
 The shell must contain a persistent header, a main application mount point, a compact loader and four navigation controls labelled `Alunos`, `Prescrições`, `Acompanhamento` and `Saúde do App`.
 
-- [ ] **Step 5: Run the manager regression test.**
+- [x] **Step 5: Run the manager regression test.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the scaffold.**
+- [x] **Step 6: Commit the scaffold.**
 
 ```bash
 git add V2/manager
@@ -121,7 +121,7 @@ git commit -m "feat: add manager app scaffold"
 - Produces `MANAGER_SHEETS`, `ensureManagerSheet(ss, name, headers)` and `getManagerSpreadsheet()`.
 - `setupManagerDatabase()` returns `{ sheets: [{ name: string, created: boolean, missingHeaders: string[] }] }`.
 
-- [ ] **Step 1: Write failing schema assertions.**
+- [x] **Step 1: Write failing schema assertions.**
 
 ```js
 ["Alunos", "Instancias", "Fichas", "Prescricoes", "Prescricao_Itens",
@@ -132,13 +132,13 @@ assert.match(code, /function\s+ensureManagerSheet\s*\(/);
 assert.doesNotMatch(bodyOf(code, "setupManagerDatabase"), /deleteSheet|clear\s*\(/);
 ```
 
-- [ ] **Step 2: Run the manager test and confirm failure.**
+- [x] **Step 2: Run the manager test and confirm failure.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: FAIL because the schema constants do not exist.
 
-- [ ] **Step 3: Define the schemas with stable IDs.**
+- [x] **Step 3: Define the schemas with stable IDs.**
 
 Use these mandatory headers at minimum:
 
@@ -151,17 +151,17 @@ Prescricoes: ["prescricao_id", "ficha_id", "aluno_id", "versao", "status_edicao"
 
 `Prescricao_Itens` must include `semana_1_zona_rir` through `semana_4_zona_rir` in addition to the existing series, repetitions and rest fields.
 
-- [ ] **Step 4: Implement non-destructive setup.**
+- [x] **Step 4: Implement non-destructive setup.**
 
 `ensureManagerSheet` creates only missing tabs and appends missing headers without deleting cells, rows, manual tabs or records.
 
-- [ ] **Step 5: Run regression tests.**
+- [x] **Step 5: Run regression tests.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit schema support.**
+- [x] **Step 6: Commit schema support.**
 
 ```bash
 git add V2/manager/app/Codigo.gs V2/manager/tests/manager-regression.test.js
@@ -180,7 +180,7 @@ git commit -m "feat: add manager database schema"
 - Produces `listAlunos()`, `saveAluno(payload)`, `getAlunoProfile(alunoId)` and `buildWhatsAppUrl(phone, message)`.
 - `saveAluno` returns `{ success: true, aluno: { aluno_id, nome, telefone_e164, status } }`.
 
-- [ ] **Step 1: Add failing tests for profile validation and WhatsApp URL construction.**
+- [x] **Step 1: Add failing tests for profile validation and WhatsApp URL construction.**
 
 ```js
 assert.match(code, /function\s+saveAluno\s*\(/);
@@ -189,27 +189,27 @@ assert.match(code, /wa\.me/);
 assert.match(code, /telefone_e164/);
 ```
 
-- [ ] **Step 2: Run the manager test and confirm failure.**
+- [x] **Step 2: Run the manager test and confirm failure.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: FAIL because profile functions are absent.
 
-- [ ] **Step 3: Implement profile operations.**
+- [x] **Step 3: Implement profile operations.**
 
 Normalize `telefone_e164` to digits with country code, reject empty name/phone, generate `aluno_id` with `Utilities.getUuid()`, and create exactly one `Instancias` row in status `nao_provisionada` when a new profile is saved.
 
-- [ ] **Step 4: Implement the Alunos page.**
+- [x] **Step 4: Implement the Alunos page.**
 
 Render a searchable list, an add/edit profile form, a profile detail panel and a WhatsApp action that opens `https://wa.me/<telefone_e164>` in the browser. The client must not store the phone outside the loaded manager payload.
 
-- [ ] **Step 5: Run manager tests and a manual browser check after Apps Script deployment.**
+- [x] **Step 5: Run manager tests and a manual browser check after Apps Script deployment.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: PASS. In the deployed manager, create one profile and verify that the new `Alunos` and `Instancias` records exist.
 
-- [ ] **Step 6: Commit profile functionality.**
+- [x] **Step 6: Commit profile functionality.**
 
 ```bash
 git add V2/manager
@@ -228,7 +228,7 @@ git commit -m "feat: add manager student profiles"
 - Produces `listCatalogoExercicios()`, `saveCatalogoExercicio(payload)`, `createFicha(alunoId, name)`, `savePrescricaoDraft(payload)` and `getPrescricaoEditorData(fichaId)`.
 - `savePrescricaoDraft` accepts `{ ficha_id, prescricao_id, itens: [] }` and returns a monotonically increasing `versao`.
 
-- [ ] **Step 1: Add failing catalog and RIR assertions.**
+- [x] **Step 1: Add failing catalog and RIR assertions.**
 
 ```js
 assert.match(code, /function\s+saveCatalogoExercicio\s*\(/);
@@ -238,31 +238,31 @@ assert.match(code, /semana_4_zona_rir/);
 assert.match(code, /versao_catalogo/);
 ```
 
-- [ ] **Step 2: Run the test and confirm failure.**
+- [x] **Step 2: Run the test and confirm failure.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: FAIL because catalog and draft functions are absent.
 
-- [ ] **Step 3: Implement catalog CRUD.**
+- [x] **Step 3: Implement catalog CRUD.**
 
 Each catalog row requires `exercicio_id`, `nome_exercicio`, `grupo_muscular`, `tipo_exercicio`, coefficients for the supported muscle groups, `ativo`, `versao_catalogo` and `updated_at`. Editing a coefficient increments the catalog version and creates a `recalcular_catalogo` queue item; no tenant update is executed in Phase 1.
 
-- [ ] **Step 4: Implement draft and ficha CRUD.**
+- [x] **Step 4: Implement draft and ficha CRUD.**
 
 A new ficha starts as `rascunho`, `oculta` and `inativa`. The editor stores rows in `Prescricao_Itens` with the four week triplets plus four RIR-zone fields. The editor reads only active catalog entries and calculates a local planned-demand preview using `coeficiente × séries prescritas`.
 
-- [ ] **Step 5: Render the Prescrições page.**
+- [x] **Step 5: Render the Prescrições page.**
 
 Show fichas for the selected aluno, version/status chips, a draft editor and the planned-demand preview. Do not render publication, activation or tenant calls in this phase.
 
-- [ ] **Step 6: Run tests.**
+- [x] **Step 6: Run tests.**
 
 Run: `node V2/manager/tests/manager-regression.test.js`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit catalogs and drafts.**
+- [x] **Step 7: Commit catalogs and drafts.**
 
 ```bash
 git add V2/manager
@@ -276,11 +276,11 @@ git commit -m "feat: add manager catalog and prescription drafts"
 - Modify: `V2/docs/knowledge hub.html`
 - Modify: `V2/docs/superpowers/specs/2026-07-18-xsteam-v2-manager-single-tenant-design.md`
 
-- [ ] **Step 1: Add Phase 1 status to the Markdown and HTML continuity documents.**
+- [x] **Step 1: Add Phase 1 status to the Markdown and HTML continuity documents.**
 
 Record the manager project location, completed central tabs, catalog version rule, known manual Drive configuration still pending, and the exact next phase: tenant publication contract.
 
-- [ ] **Step 2: Run all local tests.**
+- [x] **Step 2: Run all local tests.**
 
 Run:
 
@@ -292,7 +292,7 @@ node V2/tests/frontend-polish.test.js
 
 Expected: every test prints only `PASS` lines and exits with code `0`.
 
-- [ ] **Step 3: Run whitespace and working-tree checks.**
+- [x] **Step 3: Run whitespace and working-tree checks.**
 
 Run:
 
@@ -303,7 +303,7 @@ git status --short
 
 Expected: no whitespace errors; only intended Phase 1 files are modified before commit.
 
-- [ ] **Step 4: Commit Phase 1 documentation.**
+- [x] **Step 4: Commit Phase 1 documentation.**
 
 ```bash
 git add V2/docs

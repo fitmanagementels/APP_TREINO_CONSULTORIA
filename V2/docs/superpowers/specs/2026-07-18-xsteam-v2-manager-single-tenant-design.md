@@ -185,3 +185,6 @@ A implantação existente é atualizada, não recriada. Consequentemente, a URL 
 - O dashboard de saúde apresenta uso, erros e falhas dos PWAs dos alunos sem polling em massa.
 - Atualizações em massa dos PWAs preservam URLs existentes e podem ser revertidas por instância.
 - O fluxo de treino continua utilizável durante falhas temporárias ou recálculos em segundo plano.
+## Status de implementação — 18 de julho de 2026
+
+A Fase 1 está concluída localmente em `V2/manager/`: scaffold do Gerenciador, schema central aditivo, perfis com WhatsApp, catálogo central com versão e fila de recálculo, fichas/runs de prescrição em rascunho e prévia de demanda planejada. Ainda não houve acesso ao Drive nem deploy no Apps Script; a validação externa e a criação manual das planilhas/modelos continuam pendentes. A próxima entrega é o contrato de publicação e o PWA do aluno da Fase 2.
