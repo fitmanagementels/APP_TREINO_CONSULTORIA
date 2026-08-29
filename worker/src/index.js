@@ -13,9 +13,19 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/status") {
+      const [prescriptions, executions] = await env.DB.batch([
+        env.DB.prepare("SELECT COUNT(*) AS count FROM prescription_exercises"),
+        env.DB.prepare("SELECT COUNT(*) AS count FROM execution_records"),
+      ]);
+
       return json({
         success: true,
-        data: { service: "xsteam-pwa", database: "unavailable" },
+        data: {
+          service: "xsteam-pwa",
+          database: "ok",
+          prescriptionRows: prescriptions.results[0].count,
+          executionRows: executions.results[0].count,
+        },
       });
     }
 

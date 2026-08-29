@@ -30,6 +30,7 @@
 | `worker/package.json` | Scopes ES modules to the Worker while preserving the legacy CommonJS test files at repository root. |
 | `wrangler.jsonc.example` | Committed Worker, static asset and D1 binding template; contains no secrets or real resource IDs. |
 | `wrangler.jsonc` | Ignored local active Worker configuration, created from the example once a D1 database exists. |
+| `wrangler.test.json` | Committed JSON-only Worker test configuration; the Vitest integration does not load `.jsonc.example` files. |
 | `worker/src/index.js` | HTTP router, response normalization, static asset fallback and error boundary. |
 | `worker/src/prescriptions.js` | D1 reads/writes for catalog and prescriptions. |
 | `worker/src/executions.js` | D1 reads and idempotent execution upserts. |
@@ -40,6 +41,7 @@
 | `scripts/import-google-sheet-csv.js` | Validates and converts exported CSVs into parameterized D1 import batches. |
 | `scripts/audit-migration.js` | Compares source manifests and D1 counts/keys before cutover. |
 | `tests/cloudflare/*.test.mjs` | Worker-runtime integration tests against D1. |
+| `tests/cloudflare/setup.mjs` | Applies every versioned D1 migration before each isolated Worker test file. |
 | `tests/migration/*.test.js` | Node tests for CSV normalization, identity and audit rules. |
 | `docs/guias-operacionais/` | Plain-language manual steps, created before staging and production gates. |
 
@@ -259,7 +261,10 @@ git commit -m "build: serve PWA assets from Cloudflare Worker"
 
 **Files:**
 - Create: `worker/migrations/0001_initial_schema.sql`
-- Create: `tests/cloudflare/schema.test.js`
+- Create: `wrangler.test.json`
+- Modify: `vitest.config.mjs`
+- Create: `tests/cloudflare/setup.mjs`
+- Create: `tests/cloudflare/schema.test.mjs`
 - Modify: `worker/src/index.js`
 
 **Interfaces:**
@@ -282,7 +287,9 @@ Assert that status returns `database: "ok"`, `prescriptionRows: 0` and `executio
 Run: `npm test -- tests/cloudflare/schema.test.js`  
 Expected: FAIL with `no such table`.
 
-- [ ] **Step 3: Add this complete initial schema.**
+- [ ] **Step 3: Add this complete initial schema and test migration setup.**
+
+Set `vitest.config.mjs` to load `wrangler.test.json`, which has the `DB` binding and a local-only zero UUID. Read `./worker/migrations` with `readD1Migrations()` and expose the result as `TEST_MIGRATIONS` through `miniflare.bindings`. In `tests/cloudflare/setup.mjs`, run `await applyD1Migrations(env.DB, env.TEST_MIGRATIONS)` in `beforeAll`. This makes each isolated Worker test use the same versioned schema as deployment.
 
 ```sql
 CREATE TABLE IF NOT EXISTS exercise_catalog (

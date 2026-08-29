@@ -1,0 +1,13 @@
+{
+  "name": "xsteam-pwa-test",
+  "main": "worker/src/index.js",
+  "compatibility_date": "2026-08-29",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xsteam-pwa-test",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "worker/migrations"
+    }
+  ]
+}
