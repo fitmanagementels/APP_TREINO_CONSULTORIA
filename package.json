@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "assets:build": "node scripts/build-cloudflare-assets.js",
+    "dev": "npm run assets:build && wrangler dev",
+    "deploy": "npm run assets:build && wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
+  }
+}

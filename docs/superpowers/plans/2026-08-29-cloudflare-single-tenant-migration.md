@@ -27,6 +27,7 @@
 | Path | Responsibility |
 |---|---|
 | `package.json` | Local scripts and pinned development dependencies. |
+| `worker/package.json` | Scopes ES modules to the Worker while preserving the legacy CommonJS test files at repository root. |
 | `wrangler.jsonc.example` | Committed Worker, static asset and D1 binding template; contains no secrets or real resource IDs. |
 | `wrangler.jsonc` | Ignored local active Worker configuration, created from the example once a D1 database exists. |
 | `worker/src/index.js` | HTTP router, response normalization, static asset fallback and error boundary. |
@@ -38,7 +39,7 @@
 | `scripts/build-cloudflare-assets.js` | Deterministic conversion of Apps Script includes into static assets. |
 | `scripts/import-google-sheet-csv.js` | Validates and converts exported CSVs into parameterized D1 import batches. |
 | `scripts/audit-migration.js` | Compares source manifests and D1 counts/keys before cutover. |
-| `tests/cloudflare/*.test.js` | Worker-runtime integration tests against D1. |
+| `tests/cloudflare/*.test.mjs` | Worker-runtime integration tests against D1. |
 | `tests/migration/*.test.js` | Node tests for CSV normalization, identity and audit rules. |
 | `docs/guias-operacionais/` | Plain-language manual steps, created before staging and production gates. |
 
@@ -63,10 +64,11 @@ All success responses have `{ "success": true, "data": <payload> }`; client erro
 - Create: `package.json`
 - Create: `wrangler.jsonc.example`
 - Create locally and ignore: `wrangler.jsonc`
-- Create: `vitest.config.js`
+- Create: `worker/package.json`
+- Create: `vitest.config.mjs`
 - Create: `.gitignore`
 - Create: `worker/src/index.js`
-- Create: `tests/cloudflare/health.test.js`
+- Create: `tests/cloudflare/health.test.mjs`
 
 **Interfaces:**
 - Produces `Env` with `DB: D1Database` and `ASSETS: Fetcher` for all Worker modules.
@@ -96,7 +98,7 @@ describe("GET /api/status", () => {
 
 - [ ] **Step 2: Run the test and confirm it fails because `worker/src/index.js` does not exist.**
 
-Run: `npm test -- tests/cloudflare/health.test.js`  
+Run: `npm test -- tests/cloudflare/health.test.mjs`  
 Expected: FAIL with a module-not-found error.
 
 - [ ] **Step 3: Add the exact project configuration and minimum router.**
@@ -106,7 +108,6 @@ Expected: FAIL with a module-not-found error.
 ```json
 {
   "private": true,
-  "type": "module",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -172,7 +173,15 @@ export default {
 };
 ```
 
-Use this `vitest.config.js`:
+Use this `worker/package.json`:
+
+```json
+{
+  "type": "module"
+}
+```
+
+Use this `vitest.config.mjs`:
 
 ```js
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
@@ -180,7 +189,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc.example" } })],
-  test: { include: ["tests/cloudflare/**/*.test.js"] },
+  test: { include: ["tests/cloudflare/**/*.test.mjs"] },
 });
 ```
 
@@ -188,13 +197,13 @@ Add `.dev.vars`, `.wrangler/`, `wrangler.jsonc`, `worker/public/`, `data-import/
 
 - [ ] **Step 4: Install dependencies and run the new test.**
 
-Run: `npm install && npm test -- tests/cloudflare/health.test.js`  
+Run: `npm install && npm test -- tests/cloudflare/health.test.mjs`  
 Expected: PASS.
 
 - [ ] **Step 5: Commit the independently runnable foundation.**
 
 ```bash
-git add package.json package-lock.json wrangler.jsonc.example vitest.config.js .gitignore worker/src/index.js tests/cloudflare/health.test.js
+git add package.json package-lock.json wrangler.jsonc.example worker/package.json vitest.config.mjs .gitignore worker/src/index.js tests/cloudflare/health.test.mjs
 git commit -m "chore: scaffold Cloudflare Worker foundation"
 ```
 

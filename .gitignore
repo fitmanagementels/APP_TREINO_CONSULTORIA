@@ -1,0 +1,10 @@
+node_modules/
+.dev.vars
+.wrangler/
+wrangler.jsonc
+worker/public/
+data-import/*
+!data-import/README.md
+*.csv
+.env*
+!.env.example
