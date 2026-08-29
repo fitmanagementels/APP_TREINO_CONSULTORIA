@@ -1,8 +1,15 @@
 # Contexto e Status do Projeto
 
-Última atualização: 18 de julho de 2026 (America/Fortaleza)
+Última atualização: 29 de agosto de 2026 (America/Fortaleza)
 
 Este é o documento de continuidade do projeto. Ele consolida o estado verificado no repositório, as decisões que não devem ser desfeitas e as validações que ainda dependem do ambiente Google Apps Script.
+
+## Atualização Cloudflare — staging validado
+
+- A migração single-tenant para **Cloudflare Worker + D1** está implementada localmente: o Worker serve o PWA e as rotas `/api/*`; D1 guarda catálogo, prescrição e execuções.
+- Em 29 de agosto de 2026 foi criado o banco de staging, aplicada a migração `0001_initial_schema.sql` e publicada a prévia em [xsteam-pwa.fitmanagement-els.workers.dev](https://xsteam-pwa.fitmanagement-els.workers.dev).
+- A checagem remota de `/api/status` retornou HTTP 200 com banco saudável e zero registros; a checagem no navegador confirmou que o PWA vazio libera o loader e mostra o aviso de prescrição vazia.
+- A próxima etapa é exportar os três CSVs do Google Sheets, gerar o manifesto/auditoria e importar **somente em staging**, seguindo o [Guia 03](guias-operacionais/03-exportar-e-importar-dados.md). Não foram copiados dados reais, e Apps Script/Sheets seguem intactos como rollback.
 
 ## Resumo executivo
 
