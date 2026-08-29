@@ -360,7 +360,7 @@ git commit -m "feat: add D1 schema for single-tenant PWA"
 
 **Files:**
 - Create: `worker/src/prescriptions.js`
-- Create: `tests/cloudflare/prescriptions-read.test.js`
+- Create: `tests/cloudflare/prescriptions-read.test.mjs`
 - Modify: `worker/src/index.js`
 
 **Interfaces:**
@@ -373,7 +373,7 @@ Seed one catalog exercise and two prescription rows with orders `2` and `1`; ass
 
 - [ ] **Step 2: Run the tests.**
 
-Run: `npm test -- tests/cloudflare/prescriptions-read.test.js`  
+Run: `npm test -- tests/cloudflare/prescriptions-read.test.mjs`  
 Expected: FAIL with route-not-found responses.
 
 - [ ] **Step 3: Implement queries using explicit columns, never `SELECT *`.**
@@ -410,7 +410,7 @@ git commit -m "feat: add catalog and prescription read API"
 **Files:**
 - Modify: `worker/src/prescriptions.js`
 - Modify: `worker/src/index.js`
-- Create: `tests/cloudflare/prescriptions-write.test.js`
+- Create: `tests/cloudflare/prescriptions-write.test.mjs`
 
 **Interfaces:**
 - Exports `savePrescricaoTreino(db, idFicha, idTreino, payload)`.
@@ -424,7 +424,7 @@ git commit -m "feat: add catalog and prescription read API"
 
 - [ ] **Step 2: Run the test and confirm all write requests return 404.**
 
-Run: `npm test -- tests/cloudflare/prescriptions-write.test.js`  
+Run: `npm test -- tests/cloudflare/prescriptions-write.test.mjs`  
 Expected: FAIL with expected `422` or `200`, received `404`.
 
 - [ ] **Step 3: Validate before writing, then use one D1 batch.**
@@ -458,7 +458,7 @@ Expected: all PASS.
 - [ ] **Step 5: Commit the editor write path.**
 
 ```bash
-git add worker/src/prescriptions.js worker/src/index.js tests/cloudflare/prescriptions-write.test.js
+git add worker/src/prescriptions.js worker/src/index.js tests/cloudflare/prescriptions-write.test.mjs
 git commit -m "feat: save prescriptions atomically in D1"
 ```
 
