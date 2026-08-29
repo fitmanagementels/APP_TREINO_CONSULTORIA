@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import worker from "../../worker/src/index.js";
+import { authenticatedHeaders } from "./auth-helper.mjs";
 
 describe("D1 schema", () => {
   it("stores core rows and reports database counts", async () => {
@@ -17,7 +18,7 @@ describe("D1 schema", () => {
       .run();
 
     const response = await worker.fetch(
-      new Request("https://example.test/api/status"),
+      new Request("https://example.test/api/status", { headers: await authenticatedHeaders() }),
       env,
       {},
     );

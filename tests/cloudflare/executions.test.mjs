@@ -1,11 +1,15 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import worker from "../../worker/src/index.js";
+import { authenticatedHeaders } from "./auth-helper.mjs";
 
 const sessionId = "Ficha A_Treino A_Supino reto_W1_2026-08-29_S1";
 
 async function call(path, init) {
-  const response = await worker.fetch(new Request(`https://example.test${path}`, init), env, {});
+  const response = await worker.fetch(new Request(`https://example.test${path}`, {
+    ...init,
+    headers: await authenticatedHeaders(init?.headers),
+  }), env, {});
   return { status: response.status, body: await response.json() };
 }
 

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import worker from "../../worker/src/index.js";
+import { authenticatedHeaders } from "./auth-helper.mjs";
 
 async function save(idFicha, idTreino, exercicios) {
   const response = await worker.fetch(
@@ -8,7 +9,7 @@ async function save(idFicha, idTreino, exercicios) {
       `https://example.test/api/prescriptions/${encodeURIComponent(idFicha)}/${encodeURIComponent(idTreino)}`,
       {
         method: "PUT",
-        headers: { "content-type": "application/json" },
+        headers: await authenticatedHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ exercicios }),
       },
     ),

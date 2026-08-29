@@ -1,9 +1,12 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import worker from "../../worker/src/index.js";
+import { authenticatedHeaders } from "./auth-helper.mjs";
 
 async function request(path) {
-  const response = await worker.fetch(new Request(`https://example.test${path}`), env, {});
+  const response = await worker.fetch(new Request(`https://example.test${path}`, {
+    headers: await authenticatedHeaders(),
+  }), env, {});
   return { status: response.status, body: await response.json() };
 }
 

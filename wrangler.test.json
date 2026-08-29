@@ -2,6 +2,11 @@
   "name": "xsteam-pwa-test",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-08-29",
+  "vars": {
+    "GOOGLE_CLIENT_ID": "client-id.apps.googleusercontent.com",
+    "ALLOWED_GOOGLE_EMAIL": "allowed@example.test",
+    "SESSION_SECRET": "test-session-secret"
+  },
   "d1_databases": [
     {
       "binding": "DB",

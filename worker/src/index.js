@@ -10,13 +10,26 @@ import {
   syncExecucaoData,
 } from "./executions.js";
 import { getGestaoCargaData, getInitialAppData } from "./load.js";
+import { AuthError, createSession, verifyGoogleCredential, verifySession } from "./auth.js";
 
-function json(data, status = 200) {
+const PUBLIC_AUTH_PATHS = new Set(["/api/auth/config", "/api/auth/google", "/api/auth/session", "/api/auth/logout"]);
+
+function cookie(request, name) {
+  const match = (request.headers.get("cookie") || "").match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+  return match ? match[1] : "";
+}
+
+function sessionCookie(value, maxAge) {
+  return `xs_session=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...headers,
     },
   });
 }
@@ -26,6 +39,26 @@ export default {
     const url = new URL(request.url);
 
     try {
+    if (request.method === "GET" && url.pathname === "/api/auth/config") {
+      return json({ success: true, data: { clientId: env.GOOGLE_CLIENT_ID || "" } });
+    }
+    if (request.method === "GET" && url.pathname === "/api/auth/session") {
+      const session = await verifySession(cookie(request, "xs_session"), env.SESSION_SECRET, Date.now());
+      return json({ success: true, data: session ? { authenticated: true, email: session.email } : { authenticated: false } });
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/logout") {
+      return json({ success: true, data: { authenticated: false } }, 200, { "set-cookie": sessionCookie("", 0) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/google") {
+      const { credential } = await request.json();
+      const identity = await verifyGoogleCredential(credential, env);
+      const session = await createSession(identity.email, env.SESSION_SECRET);
+      return json({ success: true, data: identity }, 200, { "set-cookie": sessionCookie(session, 7 * 24 * 60 * 60) });
+    }
+    if (url.pathname.startsWith("/api/") && !PUBLIC_AUTH_PATHS.has(url.pathname)) {
+      const session = await verifySession(cookie(request, "xs_session"), env.SESSION_SECRET, Date.now());
+      if (!session) return json({ success: false, code: "AUTH_REQUIRED", error: "Autenticação necessária." }, 401);
+    }
     if (url.pathname === "/api/status") {
       const [prescriptions, executions] = await env.DB.batch([
         env.DB.prepare("SELECT COUNT(*) AS count FROM prescription_exercises"),
@@ -109,6 +142,9 @@ export default {
 
       return env.ASSETS.fetch(request);
     } catch (error) {
+      if (error instanceof AuthError) {
+        return json({ success: false, code: error.code, error: error.message }, error.code === "AUTH_FORBIDDEN" ? 403 : 401);
+      }
       if (url.pathname.startsWith("/api/")) {
         console.error("[xsteam api]", error);
         return json(
