@@ -25,3 +25,14 @@ test("active PWA source uses only same-origin Cloudflare API routes", () => {
   assert.doesNotMatch(index, /getInitialAppDataJson\(\)/);
   assert.doesNotMatch(index, /include\('/);
 });
+
+test("PWA starts only after a Google-backed Worker session is confirmed", () => {
+  assert.match(index, /id="google-login-overlay"/);
+  assert.match(index, /id="google-login-button"/);
+  assert.match(script, /var Auth\s*=/);
+  assert.match(script, /\/api\/auth\/session/);
+  assert.match(script, /\/api\/auth\/config/);
+  assert.match(script, /\/api\/auth\/google/);
+  assert.match(script, /google\.accounts\.id\.initialize/);
+  assert.match(script, /Auth\.init\(\)\.then/);
+});

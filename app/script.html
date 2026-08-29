@@ -58,6 +58,136 @@ var SERVER_ROUTES = {
   savePrescricaoTreino: { method: "PUT", path: "/api/prescriptions" }
 };
 
+var Auth = {
+  started: false,
+  request: function request(path, options) {
+    var init = options || {};
+    init.credentials = "same-origin";
+    init.headers = init.headers || { Accept: "application/json" };
+    return fetch(path, init).then(function (response) {
+      return response.json().catch(function () {
+        return null;
+      }).then(function (body) {
+        if (!response.ok || !body || body.success === false) {
+          throw new Error(body && body.error || "Não foi possível verificar o acesso.");
+        }
+        return body.data || {};
+      });
+    });
+  },
+  message: function message(text, isError) {
+    var el = document.getElementById("google-login-message");
+    if (!el) return;
+    el.textContent = text;
+    el.className = isError ? "google-login-message error" : "google-login-message";
+  },
+  show: function show() {
+    var overlay = document.getElementById("google-login-overlay");
+    if (overlay) overlay.classList.add("show");
+  },
+  hide: function hide() {
+    var overlay = document.getElementById("google-login-overlay");
+    if (overlay) overlay.classList.remove("show");
+  },
+  loadGoogleScript: function loadGoogleScript(callback) {
+    var existing = document.getElementById("google-identity-services");
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      callback();
+      return;
+    }
+    if (existing) {
+      existing.addEventListener("load", callback);
+      return;
+    }
+    var script = document.createElement("script");
+    script.id = "google-identity-services";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = callback;
+    script.onerror = function () {
+      Auth.message("Não foi possível carregar o login Google. Verifique sua conexão.", true);
+    };
+    document.head.appendChild(script);
+  },
+  configureGoogle: function configureGoogle() {
+    var _this = this;
+    this.message("Preparando login Google...");
+    return this.request("/api/auth/config").then(function (config) {
+      if (!config.clientId) {
+        throw new Error("Login ainda não configurado. Siga o guia de publicação do projeto.");
+      }
+      _this.loadGoogleScript(function () {
+        if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+          _this.message("O login Google não ficou disponível. Atualize a página e tente novamente.", true);
+          return;
+        }
+        window.google.accounts.id.initialize({
+          client_id: config.clientId,
+          callback: function (response) {
+            _this.login(response && response.credential);
+          }
+        });
+        var target = document.getElementById("google-login-button");
+        if (target) {
+          target.innerHTML = "";
+          window.google.accounts.id.renderButton(target, {
+            theme: "outline",
+            size: "large",
+            text: "signin_with",
+            shape: "pill",
+            width: 280
+          });
+        }
+        _this.message("Use a conta Google autorizada.");
+      });
+    }).catch(function (error) {
+      _this.message(error.message || "Não foi possível iniciar o login.", true);
+    });
+  },
+  login: function login(credential) {
+    var _this2 = this;
+    if (!credential) {
+      this.message("O Google não retornou uma credencial. Tente novamente.", true);
+      return;
+    }
+    this.message("Validando acesso...");
+    this.request("/api/auth/google", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify({ credential: credential })
+    }).then(function () {
+      _this2.hide();
+      if (window.__xsSetLoaderStatus) window.__xsSetLoaderStatus("Acesso autorizado. Carregando treinos...");
+      App.init();
+    }).catch(function (error) {
+      _this2.message(error.message || "Esta conta não está autorizada.", true);
+    });
+  },
+  init: function startAuth() {
+    var _this3 = this;
+    if (this.started) return Promise.resolve(false);
+    this.started = true;
+    if (window.__xsSetLoaderStatus) window.__xsSetLoaderStatus("Verificando acesso seguro...");
+    return this.request("/api/auth/session").then(function (session) {
+      if (session.authenticated) {
+        _this3.hide();
+        App.init();
+        return true;
+      }
+      _this3.show();
+      _this3.configureGoogle();
+      return false;
+    }).catch(function (error) {
+      _this3.show();
+      _this3.message(error.message || "Não foi possível verificar o acesso. Verifique sua conexão.", true);
+      return false;
+    });
+  }
+};
+
 var App = {
   currentScreen: "treino",
   currentWeek: 1,
@@ -1627,9 +1757,9 @@ var App = {
 };
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", function () {
-    return App.init();
+    return Auth.init().then(function () {});
   });
 } else {
-  App.init();
+  Auth.init().then(function () {});
 }
 </script>
