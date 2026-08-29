@@ -47,7 +47,9 @@ test("normalizes BOM/whitespace headers, accepts comma demand, and skips empty p
     assert.equal(manifest.tables.exercise_catalog.parsedRows, 1);
     assert.equal(manifest.tables.prescription_exercises.skippedRows, 1);
     assert.equal(manifest.tables.prescription_exercises.importedRows, 1);
-    assert.match(fs.readFileSync(path.join(output, "01-exercise-catalog.sql"), "utf8"), /0\.75/);
+    const catalogSql = fs.readFileSync(path.join(output, "01-exercise-catalog.sql"), "utf8");
+    assert.match(catalogSql, /0\.75/);
+    assert.doesNotMatch(catalogSql, /BEGIN TRANSACTION|COMMIT;/);
     assert.match(fs.readFileSync(path.join(output, "02-prescriptions.sql"), "utf8"), /Supino d''halteres/);
   } finally {
     fs.rmSync(source, { recursive: true, force: true });
@@ -68,6 +70,23 @@ test("records duplicate session ids as a validation error and does not generate 
     assert.match(manifest.validationErrors.join("\n"), /id_sessao duplicado: sessao-1/);
     assert.equal(fs.existsSync(path.join(output, "03-executions.sql")), false);
     assert.equal(fs.existsSync(path.join(output, "import-manifest.json")), true);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+    fs.rmSync(output, { recursive: true, force: true });
+  }
+});
+
+test("keeps one record when a duplicated session row is exactly identical", () => {
+  const row = "sessao-1,01/08/2026,Supino d'halteres,1,20,10,2,8,clean";
+  const source = makeSource(sourceFiles([row, row].join("\n")));
+  const output = fs.mkdtempSync(path.join(dataImportRoot, "staging-test-"));
+
+  try {
+    const manifest = runImport({ source, output });
+    assert.equal(manifest.ok, true);
+    assert.equal(manifest.tables.execution_records.skippedRows, 1);
+    assert.equal(manifest.tables.execution_records.importedRows, 1);
+    assert.equal(fs.existsSync(path.join(output, "03-executions.sql")), true);
   } finally {
     fs.rmSync(source, { recursive: true, force: true });
     fs.rmSync(output, { recursive: true, force: true });

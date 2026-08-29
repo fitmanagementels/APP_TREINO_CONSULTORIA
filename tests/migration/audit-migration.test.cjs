@@ -53,7 +53,11 @@ test("accepts the JSON shape emitted by Wrangler D1 queries", () => {
         { table_name: "execution_records", count: 2 },
       ],
     }],
-    targetSessionIds: [{ success: true, results: [{ id_sessao: "sessao-1" }, { id_sessao: "sessao-2" }] }],
+    targetSessionIds: [{
+      success: true,
+      results: [{ id_sessao: "sessao-1" }, { id_sessao: "sessao-2" }],
+      meta: { duration: 0.261, changes: 0, attempts: 0 },
+    }],
   });
 
   assert.equal(report.ok, true);

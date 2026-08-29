@@ -659,9 +659,9 @@ The tests must assert BOM is removed from the first header; headers trim whitesp
 Run: `node --test tests/migration/import-google-sheet-csv.test.js tests/migration/audit-migration.test.js`  
 Expected: FAIL because neither script exists.
 
-- [ ] **Step 3: Implement import with validation before SQL generation.**
+- [x] **Step 3: Implement import with validation before SQL generation.**
 
-Require the source directory as `--source`, staging output as `--output`, and reject paths outside `data-import/`. The generated manifest must include `createdAt`, SHA-256 of each source file, parsed row count, skipped row count, unique key count and validation errors. Generate SQL only after no validation errors exist. Escape text as SQL string literals by replacing `'` with `''`; format numbers with `String(number)` after numeric validation; wrap each generated table import in `BEGIN TRANSACTION;`, its validated `INSERT` statements, and `COMMIT;`.
+Require the source directory as `--source`, staging output as `--output`, and reject paths outside `data-import/`. The generated manifest must include `createdAt`, SHA-256 of each source file, parsed row count, skipped row count, unique key count and validation errors. Generate SQL only after no validation errors exist. Escape text as SQL string literals by replacing `'` with `''`; format numbers with `String(number)` after numeric validation. Do not emit `BEGIN TRANSACTION` or `COMMIT;`: the current remote D1 import endpoint rejects these statements in uploaded SQL files.
 
 - [ ] **Step 4: Implement audit against exported D1 query JSON.**
 

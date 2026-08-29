@@ -9,7 +9,8 @@ Este é o documento de continuidade do projeto. Ele consolida o estado verificad
 - A migração single-tenant para **Cloudflare Worker + D1** está implementada localmente: o Worker serve o PWA e as rotas `/api/*`; D1 guarda catálogo, prescrição e execuções.
 - Em 29 de agosto de 2026 foi criado o banco de staging, aplicada a migração `0001_initial_schema.sql` e publicada a prévia em [xsteam-pwa.fitmanagement-els.workers.dev](https://xsteam-pwa.fitmanagement-els.workers.dev).
 - A checagem remota de `/api/status` retornou HTTP 200 com banco saudável e zero registros; a checagem no navegador confirmou que o PWA vazio libera o loader e mostra o aviso de prescrição vazia.
-- A próxima etapa é exportar os três CSVs do Google Sheets, gerar o manifesto/auditoria e importar **somente em staging**, seguindo o [Guia 03](guias-operacionais/03-exportar-e-importar-dados.md). Não foram copiados dados reais, e Apps Script/Sheets seguem intactos como rollback.
+- Os três CSVs foram exportados automaticamente da planilha, validados e importados **somente em staging**. A auditoria confirmou 62 exercícios, 15 prescrições e 27 execuções, sem sessões faltantes ou duplicadas.
+- Treino, Prescrição, Prescrever, Histórico e Carga foram abertos no navegador contra os dados migrados. Falta executar o cenário controlado de escrita offline e alteração de RPE do [Guia 05](guias-operacionais/05-roteiro-de-aceite-pwa.md) antes de qualquer produção. Apps Script/Sheets seguem intactos como rollback.
 
 ## Resumo executivo
 

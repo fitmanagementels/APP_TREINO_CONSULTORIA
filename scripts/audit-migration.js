@@ -15,9 +15,11 @@ function numberFrom(value) {
 }
 
 function sessionIdsFrom(value) {
-  if (typeof value === "string" || typeof value === "number") return [String(value)];
   if (Array.isArray(value)) {
-    return value.flatMap(sessionIdsFrom);
+    return value.flatMap((item) => {
+      if (typeof item === "string" || typeof item === "number") return [String(item)];
+      return sessionIdsFrom(item);
+    });
   }
   if (!value || typeof value !== "object") return [];
   if (Array.isArray(value.sessionIds)) return value.sessionIds.map(String);

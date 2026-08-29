@@ -157,13 +157,13 @@ function firstHeader(table, aliases) {
 }
 
 function transaction(statements) {
-  return ["BEGIN TRANSACTION;"].concat(statements).concat(["COMMIT;", ""]).join("\n");
+  return statements.concat([""]).join("\n");
 }
 
 function parseCatalog(table, errors) {
-  const idHeader = firstHeader(table, ["id_exercicio", "nome", "nome_do_exercicio"]);
-  const groupHeader = firstHeader(table, ["grupo_principal", "grupo"]);
-  const typeHeader = firstHeader(table, ["tipo"]);
+  const idHeader = firstHeader(table, ["id_exercicio", "nome", "nome_do_exercicio", "exercicio"]);
+  const groupHeader = firstHeader(table, ["grupo_principal", "grupo", "grupo_muscular"]);
+  const typeHeader = firstHeader(table, ["tipo", "tipo_de_exercicio"]);
   if (!idHeader) errors.push("Demanda_Muscular.csv não possui id_exercicio ou Nome do Exercício.");
   if (!groupHeader) errors.push("Demanda_Muscular.csv não possui grupo_principal.");
   if (!typeHeader) errors.push("Demanda_Muscular.csv não possui tipo.");
@@ -246,7 +246,8 @@ function parsePrescriptions(table, errors) {
 function parseExecutions(table, errors) {
   requireColumns(table, "DB_Execucao.csv", EXECUTION_COLUMNS, errors);
   const records = [];
-  const seen = new Set();
+  const seen = new Map();
+  let skippedRows = 0;
   table.rows.forEach((row, index) => {
     const rowNumber = index + 2;
     const record = {};
@@ -254,8 +255,6 @@ function parseExecutions(table, errors) {
     ["id_sessao", "data_treino", "id_exercicio"].forEach((column) => {
       if (!record[column]) errors.push(`${column} obrigatório na linha ${rowNumber} de DB_Execucao.csv.`);
     });
-    if (seen.has(record.id_sessao)) errors.push(`DB_Execucao.csv possui id_sessao duplicado: ${record.id_sessao}.`);
-    seen.add(record.id_sessao);
     ["carga_absoluta", "reps_executadas", "rir", "rpe_sessao"].forEach((column) => {
       record[column] = decimal(record[column], column, errors, rowNumber, {
         integer: column === "reps_executadas",
@@ -264,13 +263,22 @@ function parseExecutions(table, errors) {
       });
     });
     record.sync_status = record.sync_status || "clean";
+    if (seen.has(record.id_sessao)) {
+      if (JSON.stringify(seen.get(record.id_sessao)) === JSON.stringify(record)) {
+        skippedRows += 1;
+        return;
+      }
+      errors.push(`DB_Execucao.csv possui id_sessao duplicado: ${record.id_sessao}.`);
+      return;
+    }
+    seen.set(record.id_sessao, record);
     records.push(record);
   });
   const statements = records.map((record) => {
     const values = EXECUTION_COLUMNS.map((column) => ["carga_absoluta", "reps_executadas", "rir", "rpe_sessao"].indexOf(column) !== -1 ? sqlNumber(record[column]) : sqlText(record[column]));
     return "INSERT INTO execution_records (" + EXECUTION_COLUMNS.join(", ") + ") VALUES (" + values.join(", ") + ") ON CONFLICT(id_sessao) DO UPDATE SET data_treino = excluded.data_treino, id_exercicio = excluded.id_exercicio, semana_referencia = excluded.semana_referencia, carga_absoluta = excluded.carga_absoluta, reps_executadas = excluded.reps_executadas, rir = excluded.rir, rpe_sessao = excluded.rpe_sessao, sync_status = excluded.sync_status;";
   });
-  return { records, skippedRows: 0, sql: transaction(statements) };
+  return { records, skippedRows, sql: transaction(statements) };
 }
 
 function tableManifest(fileName, table, parsed) {
