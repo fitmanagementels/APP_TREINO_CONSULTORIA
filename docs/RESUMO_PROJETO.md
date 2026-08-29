@@ -4,13 +4,14 @@
 
 Este é o documento de continuidade do projeto. Ele consolida o estado verificado no repositório, as decisões que não devem ser desfeitas e as validações que ainda dependem do ambiente Google Apps Script.
 
-## Atualização Cloudflare — staging validado
+## Atualização Cloudflare — staging validado e acesso Google pronto para configurar
 
 - A migração single-tenant para **Cloudflare Worker + D1** está implementada localmente: o Worker serve o PWA e as rotas `/api/*`; D1 guarda catálogo, prescrição e execuções.
-- Em 29 de agosto de 2026 foi criado o banco de staging, aplicada a migração `0001_initial_schema.sql` e publicada a prévia em [xsteam-pwa.fitmanagement-els.workers.dev](https://xsteam-pwa.fitmanagement-els.workers.dev).
-- A checagem remota de `/api/status` retornou HTTP 200 com banco saudável e zero registros; a checagem no navegador confirmou que o PWA vazio libera o loader e mostra o aviso de prescrição vazia.
+- Em 29 de agosto de 2026 foi criado o banco de staging e aplicada a migração `0001_initial_schema.sql`.
+- A prévia gratuita `workers.dev` foi desativada temporariamente depois da importação, para não expor os dados de staging antes do login Google estar configurado.
 - Os três CSVs foram exportados automaticamente da planilha, validados e importados **somente em staging**. A auditoria confirmou 62 exercícios, 15 prescrições e 27 execuções, sem sessões faltantes ou duplicadas.
-- Treino, Prescrição, Prescrever, Histórico e Carga foram abertos no navegador contra os dados migrados. Falta executar o cenário controlado de escrita offline e alteração de RPE do [Guia 05](guias-operacionais/05-roteiro-de-aceite-pwa.md) antes de qualquer produção. Apps Script/Sheets seguem intactos como rollback.
+- Treino, Prescrição, Prescrever, Histórico e Carga foram abertos no navegador contra os dados migrados. O código agora exige login Google, valida o token no Worker e grava apenas uma sessão segura `HttpOnly`; todos os dados de `/api/*` ficam bloqueados sem sessão.
+- Falta o proprietário criar o ID público do Google, cadastrar os dois segredos diretamente no Cloudflare e me avisar para reativar/publicar a URL. O passo a passo está no [Guia 06](guias-operacionais/06-login-google-sem-dominio.md). Apps Script/Sheets seguem intactos como rollback.
 
 ## Resumo executivo
 

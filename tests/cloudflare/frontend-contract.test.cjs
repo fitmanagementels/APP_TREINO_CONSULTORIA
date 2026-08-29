@@ -6,6 +6,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..", "..");
 const script = fs.readFileSync(path.join(root, "app", "script.html"), "utf8");
 const index = fs.readFileSync(path.join(root, "app", "index.html"), "utf8");
+const wranglerExample = fs.readFileSync(path.join(root, "wrangler.jsonc.example"), "utf8");
 
 test("active PWA source uses only same-origin Cloudflare API routes", () => {
   assert.doesNotMatch(script, /google\.script/);
@@ -35,4 +36,9 @@ test("PWA starts only after a Google-backed Worker session is confirmed", () => 
   assert.match(script, /\/api\/auth\/google/);
   assert.match(script, /google\.accounts\.id\.initialize/);
   assert.match(script, /Auth\.init\(\)\.then/);
+});
+
+test("only the public Google client id belongs in the Worker config template", () => {
+  assert.match(wranglerExample, /GOOGLE_CLIENT_ID/);
+  assert.doesNotMatch(wranglerExample, /ALLOWED_GOOGLE_EMAIL|SESSION_SECRET/);
 });

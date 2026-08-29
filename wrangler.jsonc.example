@@ -3,6 +3,9 @@
   "name": "xsteam-pwa",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-08-29",
+  "vars": {
+    "GOOGLE_CLIENT_ID": "COLE_AQUI_O_CLIENT_ID_PUBLICO"
+  },
   "assets": {
     "directory": "./worker/public",
     "binding": "ASSETS",
