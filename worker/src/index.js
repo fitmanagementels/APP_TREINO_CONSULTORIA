@@ -25,6 +25,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    try {
     if (url.pathname === "/api/status") {
       const [prescriptions, executions] = await env.DB.batch([
         env.DB.prepare("SELECT COUNT(*) AS count FROM prescription_exercises"),
@@ -106,6 +107,16 @@ export default {
       );
     }
 
-    return env.ASSETS.fetch(request);
+      return env.ASSETS.fetch(request);
+    } catch (error) {
+      if (url.pathname.startsWith("/api/")) {
+        console.error("[xsteam api]", error);
+        return json(
+          { success: false, code: "INTERNAL_ERROR", error: "Erro interno do serviço." },
+          500,
+        );
+      }
+      throw error;
+    }
   },
 };

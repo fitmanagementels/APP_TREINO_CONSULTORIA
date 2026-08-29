@@ -309,6 +309,12 @@ function runImport({ source, output }) {
   const catalog = parseCatalog(catalogTable, errors);
   const prescriptions = parsePrescriptions(prescriptionTable, errors);
   const executions = parseExecutions(executionTable, errors);
+  const catalogIds = new Set(catalog.records.map((record) => record.id));
+  prescriptions.records.forEach((record) => {
+    if (!catalogIds.has(record.id_exercicio)) {
+      errors.push(`DB_Prescricao.csv referencia exercício fora de Demanda_Muscular: ${record.id_exercicio}.`);
+    }
+  });
   const manifest = {
     createdAt: new Date().toISOString(),
     ok: errors.length === 0,

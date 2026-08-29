@@ -16,4 +16,25 @@ describe("API routing", () => {
       error: "Rota não encontrada.",
     });
   });
+
+  it("does not expose an unexpected database error through an API response", async () => {
+    const response = await worker.fetch(
+      new Request("https://example.test/api/status"),
+      {
+        DB: {
+          batch: async () => {
+            throw new Error("connection details must stay private");
+          },
+        },
+      },
+      {},
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      code: "INTERNAL_ERROR",
+      error: "Erro interno do serviço.",
+    });
+  });
 });

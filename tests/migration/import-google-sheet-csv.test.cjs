@@ -73,3 +73,20 @@ test("records duplicate session ids as a validation error and does not generate 
     fs.rmSync(output, { recursive: true, force: true });
   }
 });
+
+test("blocks prescriptions that refer to an exercise absent from the manual catalog", () => {
+  const files = sourceFiles("sessao-1,01/08/2026,Supino d'halteres,1,20,10,2,8,clean");
+  files["DB_Prescricao.csv"] = files["DB_Prescricao.csv"].replace("Supino d'halteres", "Exercício inexistente");
+  const source = makeSource(files);
+  const output = fs.mkdtempSync(path.join(dataImportRoot, "staging-test-"));
+
+  try {
+    const manifest = runImport({ source, output });
+    assert.equal(manifest.ok, false);
+    assert.match(manifest.validationErrors.join("\n"), /fora de Demanda_Muscular: Exercício inexistente/);
+    assert.equal(fs.existsSync(path.join(output, "02-prescriptions.sql")), false);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+    fs.rmSync(output, { recursive: true, force: true });
+  }
+});
