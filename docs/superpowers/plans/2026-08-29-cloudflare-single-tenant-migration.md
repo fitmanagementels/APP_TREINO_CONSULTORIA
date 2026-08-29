@@ -211,7 +211,7 @@ git commit -m "chore: scaffold Cloudflare Worker foundation"
 
 **Files:**
 - Create: `scripts/build-cloudflare-assets.js`
-- Create: `tests/cloudflare/assets-build.test.js`
+- Create: `tests/cloudflare/assets-build.test.cjs`
 - Generate: `worker/public/index.html`, `worker/public/app.js`, `worker/public/style.css`
 - Modify: `package.json`
 
@@ -231,7 +231,7 @@ assert.match(html, /window\.__XS_BOOTSTRAP__ = null;/);
 
 - [ ] **Step 2: Run it to verify the build script is missing.**
 
-Run: `node --test tests/cloudflare/assets-build.test.js`  
+Run: `node --test tests/cloudflare/assets-build.test.cjs`  
 Expected: FAIL with `MODULE_NOT_FOUND` for `scripts/build-cloudflare-assets.js`.
 
 - [ ] **Step 3: Implement the deterministic transformation.**
@@ -240,7 +240,7 @@ The script must read source files as UTF-8; remove only the outer `<style>` and 
 
 - [ ] **Step 4: Preserve the Apps Script source tests while adding the static equivalent test.**
 
-Run: `node tests/app-regression.test.js && node tests/frontend-polish.test.js && node --test tests/cloudflare/assets-build.test.js`  
+Run: `node tests/app-regression.test.js && node tests/frontend-polish.test.js && node --test tests/cloudflare/assets-build.test.cjs`  
 Expected: all PASS.
 
 - [ ] **Step 5: Start a local Worker and manually verify static delivery.**
@@ -251,7 +251,7 @@ Expected: Wrangler prints a local URL. Open `/`, then `/api/status`; the first r
 - [ ] **Step 6: Commit the asset pipeline.**
 
 ```bash
-git add scripts/build-cloudflare-assets.js tests/cloudflare/assets-build.test.js package.json .gitignore
+git add scripts/build-cloudflare-assets.js tests/cloudflare/assets-build.test.cjs package.json .gitignore
 git commit -m "build: serve PWA assets from Cloudflare Worker"
 ```
 
