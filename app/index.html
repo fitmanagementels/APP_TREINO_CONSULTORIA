@@ -14,7 +14,7 @@
       content="XSTeam Wellness V2.0 — Plataforma single-tenant de alta performance."
     />
     <title>XSTeam Wellness V2.0</title>
-    <?!= include('style'); ?>
+    <link rel="stylesheet" href="/style.css">
   </head>
 
   <body>
@@ -493,8 +493,8 @@
     </script>
 
     <script>
-      window.__XS_BOOTSTRAP__ = <?!= getInitialAppDataJson(); ?>;
+      window.__XS_BOOTSTRAP__ = null;
     </script>
-    <?!= include('script'); ?>
+    <script src="/app.js"></script>
   </body>
 </html>

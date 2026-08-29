@@ -46,6 +46,18 @@ function xsSelectOptions(values, selected, includeAll) {
   return html;
 }
 
+var SERVER_ROUTES = {
+  getInitialData: { method: "GET", path: "/api/bootstrap" },
+  getAppStatus: { method: "GET", path: "/api/status" },
+  getPrescricao: { method: "GET", path: "/api/prescriptions" },
+  getPrescriptionEditorData: { method: "GET", path: "/api/prescription-editor" },
+  getExecucao: { method: "GET", path: "/api/executions" },
+  getHistorico: { method: "GET", path: "/api/executions" },
+  getGestaoCarga: { method: "GET", path: "/api/load" },
+  syncExecucao: { method: "POST", path: "/api/executions/sync" },
+  savePrescricaoTreino: { method: "PUT", path: "/api/prescriptions" }
+};
+
 var App = {
   currentScreen: "treino",
   currentWeek: 1,
@@ -140,7 +152,7 @@ var App = {
       window.__XS_BOOTSTRAP__ = null;
       return Promise.resolve(boot);
     }
-    return this.callServer("getInitialData", "clientGetInitialData");
+    return this.callApi("getInitialData");
   },
   applyInitialData: function applyInitialData(data) {
     data = data || {};
@@ -164,7 +176,7 @@ var App = {
   },
   loadGestaoCargaInBackground: function loadGestaoCargaInBackground() {
     var _this3 = this;
-    this.callServer("getGestaoCarga", "clientGetGestaoCarga").then(function (data) {
+    this.callApi("getGestaoCarga").then(function (data) {
       _this3.cargaCache = data;
       _this3.writeCache("xs_carga", _this3.cargaCache);
     }).catch(function () {
@@ -173,7 +185,7 @@ var App = {
   },
   loadAppStatusInBackground: function loadAppStatusInBackground() {
     var _this4 = this;
-    this.callServer("getAppStatus", "clientGetAppStatus").then(function (data) {
+    this.callApi("getAppStatus").then(function (data) {
       _this4.appStatus = data;
       _this4.writeCache("xs_app_status", _this4.appStatus);
     }).catch(function (err) {
@@ -196,35 +208,44 @@ var App = {
   setLoaderStatus: function setLoaderStatus(message) {
     if (window.__xsSetLoaderStatus) window.__xsSetLoaderStatus(message);
   },
-  buildActionUrl: function buildActionUrl(action) {
-    var base = window.location.href.split("#")[0].split("?")[0];
-    return base + "?action=" + encodeURIComponent(action);
-  },
   fetchServerAction: function fetchServerAction(action, payload) {
-    var url = this.buildActionUrl(action);
-    var bodyPayload = { action: action };
-    if (payload) {
-      Object.keys(payload).forEach(function (key) {
-        bodyPayload[key] = payload[key];
-      });
+    var route = SERVER_ROUTES[action];
+    if (!route) {
+      return Promise.reject(new Error("Ação não mapeada: " + action));
     }
-    var options = payload ? {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(bodyPayload)
-    } : {
-      method: "GET",
+    var url = route.path;
+    var bodyPayload = payload || null;
+    if (action === "savePrescricaoTreino") {
+      if (!payload || !payload.id_ficha || !payload.id_treino) {
+        return Promise.reject(new Error("Ficha e treino são obrigatórios."));
+      }
+      url += "/" + encodeURIComponent(payload.id_ficha) + "/" + encodeURIComponent(payload.id_treino);
+      bodyPayload = { exercicios: payload.exercicios || [] };
+    }
+    var options = route.method === "GET" ? {
+      method: route.method,
+      credentials: "same-origin",
       headers: {
         Accept: "application/json"
       }
+    } : {
+      method: route.method,
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(bodyPayload)
     };
     return fetch(url, options).then(function (response) {
-      if (!response.ok) {
-        throw new Error("HTTP " + response.status);
-      }
-      return response.json();
+      return response.json().catch(function () {
+        return null;
+      }).then(function (result) {
+        if (!response.ok) {
+          throw new Error(result && result.error || "HTTP " + response.status);
+        }
+        return result;
+      });
     }).then(function (result) {
       if (!result || result.success === false) {
         throw new Error(result && result.error || "Falha em " + action);
@@ -235,48 +256,8 @@ var App = {
       return result.data !== undefined ? result.data : result;
     });
   },
-  callServer: function callServer(action, googleMethod, payload) {
-    var _this5 = this;
-    return new Promise(function (resolve, reject) {
-      var fallbackToFetch = function fallbackToFetch() {
-        _this5.fetchServerAction(action, payload).then(resolve).catch(reject);
-      };
-      if (window.google && google.script && google.script.run) {
-        try {
-          var runner = google.script.run.withSuccessHandler(function (result) {
-            if (result === null || result === undefined) {
-              reject(new Error("Resposta vazia do Apps Script"));
-              return;
-            }
-            resolve(result);
-          }).withFailureHandler(reject);
-          if (googleMethod === "clientGetInitialData") {
-            runner.clientGetInitialData();
-          } else if (googleMethod === "clientGetPrescriptionEditorData") {
-            runner.clientGetPrescriptionEditorData();
-          } else if (googleMethod === "clientSavePrescricaoTreino") {
-            runner.clientSavePrescricaoTreino(payload);
-          } else if (googleMethod === "clientGetPrescricao") {
-            runner.clientGetPrescricao();
-          } else if (googleMethod === "clientGetHistorico") {
-            runner.clientGetHistorico();
-          } else if (googleMethod === "clientGetGestaoCarga") {
-            runner.clientGetGestaoCarga();
-          } else if (googleMethod === "clientGetAppStatus") {
-            runner.clientGetAppStatus();
-          } else if (googleMethod === "clientSyncExecucao") {
-            runner.clientSyncExecucao(payload.records || payload);
-          } else {
-            reject(new Error("Metodo Apps Script nao mapeado: " + googleMethod));
-          }
-          return;
-        } catch (err) {
-          reject(err);
-          return;
-        }
-      }
-      fallbackToFetch();
-    });
+  callApi: function callApi(action, payload) {
+    return this.fetchServerAction(action, payload);
   },
   finishInitialRender: function finishInitialRender(message) {
     try {
@@ -550,7 +531,7 @@ var App = {
       openModal();
       return;
     }
-    this.callServer("getPrescriptionEditorData", "clientGetPrescriptionEditorData").then(function (data) {
+    this.callApi("getPrescriptionEditorData").then(function (data) {
       _this9.applyCatalogPayload(data);
       openModal();
     }).catch(function (err) {
@@ -758,7 +739,7 @@ var App = {
       this.renderPrescrever();
       return;
     }
-    this.callServer("getPrescriptionEditorData", "clientGetPrescriptionEditorData").then(function (data) {
+    this.callApi("getPrescriptionEditorData").then(function (data) {
       _this12.applyPrescriptionEditorData(data);
       _this12.renderPrescrever();
     }).catch(function (err) {
@@ -1221,7 +1202,7 @@ var App = {
       id_treino: draft.id_treino,
       exercicios: draft.exercicios || []
     };
-    this.callServer("savePrescricaoTreino", "clientSavePrescricaoTreino", payload).then(function (result) {
+    this.callApi("savePrescricaoTreino", payload).then(function (result) {
       if (result && result.success === false) throw new Error(result.error || "Falha ao salvar");
       if (result && result.success === true && result.data) result = result.data;
       _this13.applyPrescriptionEditorData(result);
@@ -1287,10 +1268,10 @@ var App = {
     });
     if (pend.length === 0) return;
     this.showToast("Sincronizando...", "warning");
-    this.callServer("syncExecucao", "clientSyncExecucao", {
+    this.callApi("syncExecucao", {
       records: pend
     }).then(function (res) {
-      if (res.success) {
+      if (res && res.synced !== undefined) {
         var all = _this13.readCache("xs_pending", []);
         all.forEach(function (r) {
           if (r.sync_status === "pending") r.sync_status = "clean";

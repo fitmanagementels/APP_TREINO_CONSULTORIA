@@ -144,7 +144,7 @@ const tests = [
     () => {
       assert.match(script, /appStatus:\s*null/);
       assert.match(index, /window\.__XS_BOOTSTRAP__/);
-      assert.match(index, /getInitialAppDataJson\(\)/);
+      assert.match(index, /window\.__XS_BOOTSTRAP__\s*=\s*null/);
       const body = bodyOf(script, "applyInitialData");
       assert.match(body, /Prescrição vazia/);
       assert.match(body, /showDataWarning\(/);
@@ -326,8 +326,8 @@ const tests = [
   [
     "frontend editor should save ciclos to existing semana fields",
     () => {
-      assert.match(script, /clientGetPrescriptionEditorData/);
-      assert.match(script, /clientSavePrescricaoTreino/);
+      assert.match(script, /getPrescriptionEditorData/);
+      assert.match(script, /savePrescricaoTreino/);
       assert.match(script, /Ciclo 1/);
       assert.match(script, /semana_1_sets/);
       assert.match(script, /semana_4_descanso/);
@@ -400,7 +400,7 @@ const tests = [
     "index should include an inline loader fallback before script include",
     () => {
       const fallbackIndex = index.indexOf("window.__xsReleaseLoader");
-      const includeIndex = index.indexOf("include('script')");
+      const includeIndex = index.indexOf('<script src="/app.js"></script>');
       assert.ok(fallbackIndex > -1, "fallback should exist");
       assert.ok(includeIndex > -1, "script include should exist");
       assert.ok(fallbackIndex < includeIndex, "fallback should run before app script");
@@ -424,21 +424,18 @@ const tests = [
     },
   ],
   [
-    "app should keep fetch only for non Apps Script contexts",
+    "app should use same-origin Cloudflare API routes",
     () => {
       assert.match(script, /fetchServerAction\s*\(/);
-      assert.match(script, /callServer\s*\(/);
-      assert.match(script, /encodeURIComponent\(action\)/);
-      const body = bodyOf(script, "callServer");
-      assert.doesNotMatch(body, /typeof\s+google\.script\.run\[googleMethod\]/);
-      assert.doesNotMatch(body, /runner\[googleMethod\]/);
-      assert.match(body, /runner\.clientGetInitialData\(\)/);
-      assert.match(body, /runner\.clientGetPrescricao\(\)/);
-      assert.match(body, /runner\.clientGetHistorico\(\)/);
-      assert.match(body, /withFailureHandler\(reject\)/);
-      assert.match(body, /reject\(new Error\("Resposta vazia do Apps Script"\)\)/);
-      assert.doesNotMatch(body, /fallbackToFetch\(new Error\("Resposta vazia do Apps Script"\)\)/);
-      assert.doesNotMatch(body, /return fallbackToFetch\(err\)/);
+      assert.match(script, /callApi\s*\(/);
+      assert.match(script, /var SERVER_ROUTES/);
+      assert.match(script, /getInitialData:\s*\{ method: "GET", path: "\/api\/bootstrap" \}/);
+      assert.match(script, /getPrescriptionEditorData:\s*\{ method: "GET", path: "\/api\/prescription-editor" \}/);
+      assert.match(script, /syncExecucao:\s*\{ method: "POST", path: "\/api\/executions\/sync" \}/);
+      const body = bodyOf(script, "callApi");
+      assert.match(body, /this\.fetchServerAction\(action, payload\)/);
+      assert.doesNotMatch(script, /google\.script/);
+      assert.doesNotMatch(script, /clientGet/);
     },
   ],
   [
@@ -453,12 +450,12 @@ const tests = [
     },
   ],
   [
-    "callServer should reject null google script responses without parsing HTML",
+    "Cloudflare transport should return the API data envelope payload",
     () => {
-      const body = bodyOf(script, "callServer");
-      assert.match(body, /withSuccessHandler\(function \(result\)/);
-      assert.match(body, /result === null \|\| result === undefined/);
-      assert.match(body, /reject\(new Error\("Resposta vazia do Apps Script"\)\)/);
+      const body = bodyOf(script, "fetchServerAction");
+      assert.match(body, /response\.json\(\)/);
+      assert.match(body, /result\.data !== undefined \? result\.data : result/);
+      assert.match(body, /result && result\.error/);
     },
   ],
   [
