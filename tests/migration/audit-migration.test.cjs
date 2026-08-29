@@ -41,3 +41,20 @@ test("passes only when every imported count and execution id exists once in D1 o
 
   assert.equal(report.ok, true);
 });
+
+test("accepts the JSON shape emitted by Wrangler D1 queries", () => {
+  const report = auditMigration({
+    manifest,
+    targetCounts: [{
+      success: true,
+      results: [
+        { table_name: "exercise_catalog", count: 1 },
+        { table_name: "prescription_exercises", count: 2 },
+        { table_name: "execution_records", count: 2 },
+      ],
+    }],
+    targetSessionIds: [{ success: true, results: [{ id_sessao: "sessao-1" }, { id_sessao: "sessao-2" }] }],
+  });
+
+  assert.equal(report.ok, true);
+});

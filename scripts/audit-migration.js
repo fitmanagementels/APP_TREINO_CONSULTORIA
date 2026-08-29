@@ -25,13 +25,30 @@ function sessionIdsFrom(value) {
   return Object.values(value).flatMap(sessionIdsFrom);
 }
 
+function namedCountsFrom(value, result = {}) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => namedCountsFrom(item, result));
+    return result;
+  }
+  if (!value || typeof value !== "object") return result;
+  if (value.table_name && value.count !== undefined) {
+    const count = numberFrom(value.count);
+    if (count !== null) result[String(value.table_name)] = count;
+  }
+  Object.values(value).forEach((item) => namedCountsFrom(item, result));
+  return result;
+}
+
 function auditMigration({ manifest, targetCounts, targetSessionIds }) {
   const tables = {};
   const errors = [];
+  const namedCounts = namedCountsFrom(targetCounts);
   TABLES.forEach((tableName) => {
     const sourceTable = manifest.tables && manifest.tables[tableName];
     const sourceCount = sourceTable && Number(sourceTable.importedRows);
-    const targetCount = numberFrom(targetCounts && targetCounts[tableName]);
+    const targetCount = targetCounts && Object.prototype.hasOwnProperty.call(targetCounts, tableName)
+      ? numberFrom(targetCounts[tableName])
+      : namedCounts[tableName] === undefined ? null : namedCounts[tableName];
     const ok = Number.isFinite(sourceCount) && targetCount !== null && sourceCount === targetCount;
     tables[tableName] = { sourceCount, targetCount, ok };
     if (!ok) errors.push(`Contagem divergente em ${tableName}: origem ${sourceCount}, destino ${targetCount}.`);
