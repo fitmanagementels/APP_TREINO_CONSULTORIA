@@ -467,7 +467,7 @@ git commit -m "feat: save prescriptions atomically in D1"
 **Files:**
 - Create: `worker/src/executions.js`
 - Modify: `worker/src/index.js`
-- Create: `tests/cloudflare/executions.test.js`
+- Create: `tests/cloudflare/executions.test.mjs`
 
 **Interfaces:**
 - Exports `getExecucaoData(db)` and `syncExecucaoData(db, records)`.
@@ -492,7 +492,7 @@ Assert one row exists after two requests, its final `rpe_sessao` is `9`, both re
 
 - [ ] **Step 2: Run it.**
 
-Run: `npm test -- tests/cloudflare/executions.test.js`  
+Run: `npm test -- tests/cloudflare/executions.test.mjs`  
 Expected: FAIL because `/api/executions/sync` is not implemented.
 
 - [ ] **Step 3: Implement strict payload validation and one upsert statement per record.**
@@ -535,7 +535,7 @@ git commit -m "feat: sync offline executions to D1"
 **Files:**
 - Create: `worker/src/load.js`
 - Modify: `worker/src/index.js`
-- Create: `tests/cloudflare/bootstrap-load.test.js`
+- Create: `tests/cloudflare/bootstrap-load.test.mjs`
 
 **Interfaces:**
 - Exports `getInitialAppData(db)` and `getGestaoCargaData(db)`.
@@ -547,7 +547,7 @@ Seed an execution with `carga_absoluta: 80`, `reps_executadas: 8`, `rpe_sessao: 
 
 - [ ] **Step 2: Run the tests.**
 
-Run: `npm test -- tests/cloudflare/bootstrap-load.test.js`  
+Run: `npm test -- tests/cloudflare/bootstrap-load.test.mjs`  
 Expected: FAIL with missing route or missing export.
 
 - [ ] **Step 3: Reproduce current grouping rules as pure JavaScript.**

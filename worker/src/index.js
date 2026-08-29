@@ -4,6 +4,12 @@ import {
   PrescriptionValidationError,
   savePrescricaoTreino,
 } from "./prescriptions.js";
+import {
+  ExecutionValidationError,
+  getExecucaoData,
+  syncExecucaoData,
+} from "./executions.js";
+import { getGestaoCargaData, getInitialAppData } from "./load.js";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -42,6 +48,33 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/api/prescription-editor") {
       return json({ success: true, data: await getPrescriptionEditorData(env.DB) });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/executions") {
+      return json({ success: true, data: await getExecucaoData(env.DB) });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/bootstrap") {
+      return json({ success: true, data: await getInitialAppData(env.DB) });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/load") {
+      return json({ success: true, data: await getGestaoCargaData(env.DB) });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/executions/sync") {
+      try {
+        const { records } = await request.json();
+        return json({ success: true, data: await syncExecucaoData(env.DB, records) });
+      } catch (error) {
+        if (error instanceof ExecutionValidationError) {
+          return json(
+            { success: false, code: error.code, error: error.message },
+            422,
+          );
+        }
+        throw error;
+      }
     }
 
     const prescriptionMatch = url.pathname.match(/^\/api\/prescriptions\/([^/]+)\/([^/]+)$/);
