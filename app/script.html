@@ -166,29 +166,47 @@ var Auth = {
       _this2.message(error.message || "Esta conta não está autorizada.", true);
     });
   },
-  init: function startAuth() {
+  logout: function logout() {
     var _this3 = this;
+    this.message("Encerrando sessão...");
+    return this.request("/api/auth/logout", {
+      method: "POST",
+      headers: { Accept: "application/json" }
+    }).then(function () {
+      _this3.started = false;
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        window.google.accounts.id.disableAutoSelect();
+      }
+      _this3.show();
+      _this3.configureGoogle();
+    }).catch(function (error) {
+      _this3.message(error.message || "Não foi possível encerrar a sessão.", true);
+    });
+  },
+  init: function startAuth() {
+    var _this4 = this;
     if (this.started) return Promise.resolve(false);
     this.started = true;
     if (window.__xsSetLoaderStatus) window.__xsSetLoaderStatus("Verificando acesso seguro...");
     return this.request("/api/auth/session").then(function (session) {
       if (session.authenticated) {
-        _this3.hide();
+        _this4.hide();
         App.init();
         return true;
       }
-      _this3.show();
-      _this3.configureGoogle();
+      _this4.show();
+      _this4.configureGoogle();
       return false;
     }).catch(function (error) {
-      _this3.show();
-      _this3.message(error.message || "Não foi possível verificar o acesso. Verifique sua conexão.", true);
+      _this4.show();
+      _this4.message(error.message || "Não foi possível verificar o acesso. Verifique sua conexão.", true);
       return false;
     });
   }
 };
 
 var App = {
+  bootInitialized: false,
   currentScreen: "treino",
   currentWeek: 1,
   prescricaoCache: [],
@@ -218,6 +236,12 @@ var App = {
   init: function init() {
     var _this = this;
     window.__xsAppBootStarted = true;
+    if (this.bootInitialized) {
+      this.setLoaderStatus("Atualizando dados...");
+      this.fetchInitialData();
+      return;
+    }
+    this.bootInitialized = true;
     this.setLoaderStatus("Iniciando aplicativo...");
     this.selectedDate = new Date().toLocaleDateString("en-CA");
     var dInput = document.getElementById("treino-date");

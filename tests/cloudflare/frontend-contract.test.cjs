@@ -34,6 +34,10 @@ test("PWA starts only after a Google-backed Worker session is confirmed", () => 
   assert.match(script, /\/api\/auth\/session/);
   assert.match(script, /\/api\/auth\/config/);
   assert.match(script, /\/api\/auth\/google/);
+  assert.match(index, /Auth\.logout\(\)/);
+  assert.match(script, /logout:\s*function/);
+  assert.match(script, /bootInitialized:\s*false/);
+  assert.match(script, /if \(this\.bootInitialized\)/);
   assert.match(script, /google\.accounts\.id\.initialize/);
   assert.match(script, /Auth\.init\(\)\.then/);
 });

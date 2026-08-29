@@ -23,6 +23,11 @@ function sessionCookie(value, maxAge) {
   return `xs_session=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
+async function allowedSession(request, env) {
+  const session = await verifySession(cookie(request, "xs_session"), env.SESSION_SECRET, Date.now());
+  return session && session.email === env.ALLOWED_GOOGLE_EMAIL ? session : null;
+}
+
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -34,7 +39,9 @@ function json(data, status = 200, headers = {}) {
   });
 }
 
-export default {
+export function createWorker(options = {}) {
+  const credentialVerifier = options.verifyGoogleCredential || verifyGoogleCredential;
+  return {
   async fetch(request, env) {
     const url = new URL(request.url);
 
@@ -43,20 +50,25 @@ export default {
       return json({ success: true, data: { clientId: env.GOOGLE_CLIENT_ID || "" } });
     }
     if (request.method === "GET" && url.pathname === "/api/auth/session") {
-      const session = await verifySession(cookie(request, "xs_session"), env.SESSION_SECRET, Date.now());
+      const session = await allowedSession(request, env);
       return json({ success: true, data: session ? { authenticated: true, email: session.email } : { authenticated: false } });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/logout") {
       return json({ success: true, data: { authenticated: false } }, 200, { "set-cookie": sessionCookie("", 0) });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/google") {
-      const { credential } = await request.json();
-      const identity = await verifyGoogleCredential(credential, env);
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        throw new AuthError("AUTH_REQUIRED", "Credencial Google ausente.");
+      }
+      const identity = await credentialVerifier(payload && payload.credential, env);
       const session = await createSession(identity.email, env.SESSION_SECRET);
       return json({ success: true, data: identity }, 200, { "set-cookie": sessionCookie(session, 7 * 24 * 60 * 60) });
     }
     if (url.pathname.startsWith("/api/") && !PUBLIC_AUTH_PATHS.has(url.pathname)) {
-      const session = await verifySession(cookie(request, "xs_session"), env.SESSION_SECRET, Date.now());
+      const session = await allowedSession(request, env);
       if (!session) return json({ success: false, code: "AUTH_REQUIRED", error: "Autenticação necessária." }, 401);
     }
     if (url.pathname === "/api/status") {
@@ -156,3 +168,6 @@ export default {
     }
   },
 };
+}
+
+export default createWorker();

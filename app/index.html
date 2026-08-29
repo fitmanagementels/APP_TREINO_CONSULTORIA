@@ -63,19 +63,27 @@
         <span class="dot" id="sync-dot"></span>
         <span id="sync-count">Sincronizado</span>
       </div>
-      <button
-        onclick="App.manualRefresh()"
-        style="
-          background: transparent;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-          font-size: 20px;
-          padding: 4px;
-        "
-      >
-        🔄
-      </button>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <button
+          onclick="Auth.logout()"
+          style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 6px"
+        >
+          Sair
+        </button>
+        <button
+          onclick="App.manualRefresh()"
+          style="
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px;
+          "
+        >
+          🔄
+        </button>
+      </div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════ -->

@@ -49,6 +49,25 @@ Esses comandos mandam os valores diretamente ao Cloudflare como segredos. Não c
 
 Quando terminar, responda somente: **“segredos configurados”**. Então eu reativo a URL gratuita, publico a versão protegida e faço as verificações técnicas.
 
+## Alternativa se você precisar publicar sem minha ajuda
+
+Faça isto apenas depois de concluir a Parte 2. O arquivo local `wrangler.jsonc` já existe nesta pasta e é ignorado pelo Git.
+
+1. Abra `wrangler.jsonc` em um editor de texto.
+2. Logo depois da linha `"compatibility_date"`, adicione esta configuração, trocando somente o texto entre aspas pelo ID público do cliente copiado no Google Cloud:
+
+   ```json
+   "vars": {
+     "GOOGLE_CLIENT_ID": "COLE_AQUI_O_CLIENT_ID_PUBLICO"
+   },
+   ```
+
+3. Confirme que a linha `"workers_dev": false` mudou para `"workers_dev": true`.
+4. No terminal, ainda dentro da pasta do projeto, execute `npm run deploy`.
+5. Aguarde a confirmação de publicação e siga o teste da Parte 3.
+
+Não copie nem substitua a parte do banco D1 que já está no arquivo local. Ela identifica a base migrada.
+
 ## Parte 3 — teste depois da publicação
 
 Após eu confirmar a publicação:

@@ -77,6 +77,7 @@ async function defaultGoogleVerifier(credential, clientId) {
   const { payload } = await jwtVerify(credential, googleJwks, {
     audience: clientId,
     issuer: ["https://accounts.google.com", "accounts.google.com"],
+    algorithms: ["RS256"],
   });
   return payload;
 }
