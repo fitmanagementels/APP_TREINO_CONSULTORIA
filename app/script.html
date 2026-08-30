@@ -54,6 +54,8 @@ var SERVER_ROUTES = {
   getExecucao: { method: "GET", path: "/api/executions" },
   getHistorico: { method: "GET", path: "/api/executions" },
   getGestaoCarga: { method: "GET", path: "/api/load" },
+  getCatalogStatus: { method: "GET", path: "/api/catalog/status" },
+  syncCatalog: { method: "POST", path: "/api/catalog/sync" },
   syncExecucao: { method: "POST", path: "/api/executions/sync" },
   savePrescricaoTreino: { method: "PUT", path: "/api/prescriptions" }
 };
@@ -214,6 +216,8 @@ var App = {
   cargaCache: null,
   catalogoCache: [],
   catalogoMeta: null,
+  catalogSyncStatus: null,
+  catalogSyncInProgress: false,
   editorDataLoaded: false,
   prescreverDraft: null,
   prescreverSearch: "",
@@ -479,6 +483,7 @@ var App = {
     var prescreverSearch = document.getElementById("prescrever-search");
     var prescreverGrupo = document.getElementById("prescrever-grupo");
     var prescreverSave = document.getElementById("prescrever-save-btn");
+    var prescreverSyncCatalog = document.getElementById("prescrever-sync-catalog-btn");
     var prescreverAdd = document.getElementById("prescrever-add-exercise-btn");
     var prescreverCatalogClose = document.getElementById("prescrever-catalog-close");
     var prescreverDemandClose = document.getElementById("prescrever-demand-close");
@@ -507,6 +512,11 @@ var App = {
     if (prescreverSave) {
       prescreverSave.addEventListener("click", function () {
         _this7.savePrescricaoTreino();
+      });
+    }
+    if (prescreverSyncCatalog) {
+      prescreverSyncCatalog.addEventListener("click", function () {
+        _this7.syncCatalogFromReference();
       });
     }
     if (prescreverAdd) {
@@ -891,15 +901,83 @@ var App = {
     var _this12 = this;
     if (this.editorDataLoaded) {
       this.renderPrescrever();
+      this.loadCatalogSyncStatus();
       return;
     }
     this.callApi("getPrescriptionEditorData").then(function (data) {
       _this12.applyPrescriptionEditorData(data);
       _this12.renderPrescrever();
+      return _this12.loadCatalogSyncStatus();
     }).catch(function (err) {
       _this12.showToast("Falha ao carregar editor de prescrição", "error");
       console.error("[XSTeam prescrever]", err);
       _this12.renderPrescrever();
+    });
+  },
+  loadCatalogSyncStatus: function loadCatalogSyncStatus() {
+    var _thisCatalog = this;
+    return this.callApi("getCatalogStatus").then(function (status) {
+      _thisCatalog.catalogSyncStatus = status || null;
+      _thisCatalog.renderCatalogSyncStatus();
+      return status;
+    }).catch(function (err) {
+      _thisCatalog.catalogSyncStatus = {
+        lastSuccessAt: _thisCatalog.catalogSyncStatus && _thisCatalog.catalogSyncStatus.lastSuccessAt || "",
+        lastError: err.message || "Não foi possível consultar a sincronização do catálogo."
+      };
+      _thisCatalog.renderCatalogSyncStatus();
+      return null;
+    });
+  },
+  formatCatalogSyncDate: function formatCatalogSyncDate(value) {
+    if (!value) return "";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("pt-BR") + " " + date.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  },
+  renderCatalogSyncStatus: function renderCatalogSyncStatus() {
+    var status = this.catalogSyncStatus || {};
+    var statusElement = document.getElementById("prescrever-catalog-sync-status");
+    var button = document.getElementById("prescrever-sync-catalog-btn");
+    if (button) {
+      button.disabled = this.catalogSyncInProgress;
+      button.textContent = this.catalogSyncInProgress ? "Atualizando catálogo..." : "Atualizar catálogo";
+    }
+    if (!statusElement) return;
+    var text = status.lastSuccessAt
+      ? "Catálogo atualizado em " + this.formatCatalogSyncDate(status.lastSuccessAt)
+      : "Catálogo ainda não sincronizado";
+    if (status.lastError) text += " · " + status.lastError;
+    statusElement.textContent = text;
+    statusElement.className = status.lastError ? "catalog-sync-status error" : "catalog-sync-status";
+  },
+  syncCatalogFromReference: function syncCatalogFromReference() {
+    var _thisCatalogSync = this;
+    if (this.catalogSyncInProgress) return;
+    this.catalogSyncInProgress = true;
+    this.renderCatalogSyncStatus();
+    this.callApi("syncCatalog").then(function () {
+      return _thisCatalogSync.callApi("getPrescriptionEditorData");
+    }).then(function (data) {
+      _thisCatalogSync.applyPrescriptionEditorData(data);
+      _thisCatalogSync.renderPrescrever();
+      return _thisCatalogSync.loadCatalogSyncStatus();
+    }).then(function () {
+      _thisCatalogSync.showToast("Catálogo atualizado com a referência", "success");
+    }).catch(function (err) {
+      _thisCatalogSync.catalogSyncStatus = {
+        lastSuccessAt: _thisCatalogSync.catalogSyncStatus && _thisCatalogSync.catalogSyncStatus.lastSuccessAt || "",
+        lastError: err.message || "Não foi possível atualizar o catálogo."
+      };
+      _thisCatalogSync.renderCatalogSyncStatus();
+      _thisCatalogSync.showToast(err.message || "Não foi possível atualizar o catálogo", "error");
+      console.error("[XSTeam catálogo]", err);
+    }).then(function () {
+      _thisCatalogSync.catalogSyncInProgress = false;
+      _thisCatalogSync.renderCatalogSyncStatus();
     });
   },
   applyPrescriptionEditorData: function applyPrescriptionEditorData(data) {

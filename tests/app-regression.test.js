@@ -264,6 +264,8 @@ const tests = [
       assert.match(index, /id="screen-prescrever"/);
       assert.match(index, /data-screen="prescrever"[\s\S]*Prescrever/);
       assert.match(index, /id="prescrever-add-exercise-btn"/);
+      assert.match(index, /id="prescrever-sync-catalog-btn"/);
+      assert.match(index, /id="prescrever-catalog-sync-status"/);
       assert.match(index, /id="prescrever-catalog-modal"/);
       assert.match(index, /id="prescrever-search"/);
       assert.match(index, /id="prescrever-grupo"/);
@@ -271,6 +273,8 @@ const tests = [
       assert.match(script, /catalogoCache:\s*\[\]/);
       assert.match(script, /prescreverDraft/);
       assert.match(script, /loadPrescrever\s*:/);
+      assert.match(script, /loadCatalogSyncStatus\s*:/);
+      assert.match(script, /syncCatalogFromReference\s*:/);
       assert.match(script, /renderPrescrever\s*:/);
       assert.match(script, /openAddExerciseModal\s*:/);
       assert.match(script, /closeAddExerciseModal\s*:/);

@@ -858,7 +858,17 @@
     margin-bottom: 14px;
   }
   .prescrever-toolbar .btn-neon {
+    grid-column: auto;
+  }
+  .catalog-sync-status {
     grid-column: 1 / -1;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+    min-height: 15px;
+  }
+  .catalog-sync-status.error {
+    color: var(--danger);
   }
   .prescrever-filters {
     grid-template-columns: 1.4fr 1fr;

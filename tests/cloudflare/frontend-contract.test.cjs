@@ -27,6 +27,15 @@ test("active PWA source uses only same-origin Cloudflare API routes", () => {
   assert.doesNotMatch(index, /include\('/);
 });
 
+test("Prescrever offers a same-origin reference catalog update without browser sheet access", () => {
+  assert.match(index, /id="prescrever-sync-catalog-btn"/);
+  assert.match(index, /id="prescrever-catalog-sync-status"/);
+  assert.match(script, /getCatalogStatus:\s*\{\s*method:\s*"GET",\s*path:\s*"\/api\/catalog\/status"/);
+  assert.match(script, /syncCatalog:\s*\{\s*method:\s*"POST",\s*path:\s*"\/api\/catalog\/sync"/);
+  assert.match(script, /syncCatalogFromReference:\s*function/);
+  assert.doesNotMatch(script, /docs\.google\.com\/spreadsheets/);
+});
+
 test("PWA starts only after a Google-backed Worker session is confirmed", () => {
   assert.match(index, /id="google-login-overlay"/);
   assert.match(index, /id="google-login-button"/);
