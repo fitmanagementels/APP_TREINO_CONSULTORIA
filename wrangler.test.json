@@ -7,6 +7,9 @@
     "ALLOWED_GOOGLE_EMAIL": "allowed@example.test",
     "SESSION_SECRET": "test-session-secret"
   },
+  "triggers": {
+    "crons": ["0 4 * * *"]
+  },
   "d1_databases": [
     {
       "binding": "DB",

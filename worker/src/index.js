@@ -11,6 +11,11 @@ import {
 } from "./executions.js";
 import { getGestaoCargaData, getInitialAppData } from "./load.js";
 import { AuthError, createSession, verifyGoogleCredential, verifySession } from "./auth.js";
+import {
+  CatalogSyncError,
+  getCatalogSyncStatus,
+  syncReferenceCatalog,
+} from "./catalog.js";
 
 const PUBLIC_AUTH_PATHS = new Set(["/api/auth/config", "/api/auth/google", "/api/auth/session", "/api/auth/logout"]);
 
@@ -41,6 +46,8 @@ function json(data, status = 200, headers = {}) {
 
 export function createWorker(options = {}) {
   const credentialVerifier = options.verifyGoogleCredential || verifyGoogleCredential;
+  const syncCatalog = options.syncReferenceCatalog || syncReferenceCatalog;
+  const catalogStatus = options.getCatalogSyncStatus || getCatalogSyncStatus;
   return {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -71,6 +78,21 @@ export function createWorker(options = {}) {
       const session = await allowedSession(request, env);
       if (!session) return json({ success: false, code: "AUTH_REQUIRED", error: "Autenticação necessária." }, 401);
     }
+    if (request.method === "GET" && url.pathname === "/api/catalog/status") {
+      return json({ success: true, data: await catalogStatus(env.DB) });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/catalog/sync") {
+      try {
+        return json({ success: true, data: await syncCatalog({ db: env.DB }) });
+      } catch (error) {
+        if (error instanceof CatalogSyncError) {
+          return json({ success: false, code: error.code, error: error.message }, 422);
+        }
+        throw error;
+      }
+    }
+
     if (url.pathname === "/api/status") {
       const [prescriptions, executions] = await env.DB.batch([
         env.DB.prepare("SELECT COUNT(*) AS count FROM prescription_exercises"),
@@ -166,6 +188,9 @@ export function createWorker(options = {}) {
       }
       throw error;
     }
+  },
+  scheduled(controller, env, ctx) {
+    ctx.waitUntil(syncCatalog({ db: env.DB }));
   },
 };
 }
