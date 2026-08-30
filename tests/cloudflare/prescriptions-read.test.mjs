@@ -67,13 +67,27 @@ describe("prescription read API", () => {
     expect(body.data.fichas).toEqual(["Ficha A"]);
     expect(body.data.treinosPorFicha).toEqual({ "Ficha A": ["Treino A"] });
     expect(body.data.catalogo.musculos).toEqual(["Peitoral"]);
-    expect(body.data.catalogo.rows).toContainEqual({
+    expect(body.data.catalogo.rows).toContainEqual(expect.objectContaining({
       id_exercicio: "Supino reto",
       nome: "Supino reto",
+      video_url: "",
       grupo_principal: "Peito",
+      categoria_articular: "",
       tipo: "Composto",
       demandas: { Peitoral: 1 },
-    });
+    }));
     expect(body.data).not.toHaveProperty("carga");
+  });
+
+  it("does not expose inactive catalog or prescription rows", async () => {
+    await env.DB.prepare("UPDATE exercise_catalog SET is_active = 0 WHERE id_exercicio = ?")
+      .bind("Crucifixo")
+      .run();
+
+    const { status, body } = await request("/api/prescription-editor");
+
+    expect(status).toBe(200);
+    expect(body.data.catalogo.rows.map((row) => row.id_exercicio)).toEqual(["Supino reto"]);
+    expect(body.data.prescricao.rows.map((row) => row.id_exercicio)).toEqual(["Supino reto"]);
   });
 });

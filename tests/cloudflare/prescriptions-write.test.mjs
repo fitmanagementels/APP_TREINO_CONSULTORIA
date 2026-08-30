@@ -79,4 +79,18 @@ describe("prescription write API", () => {
       expect.objectContaining({ id_exercicio: "Crucifixo", ordem_exercicio: 1 }),
     ]);
   });
+
+  it("rejects an inactive source exercise without replacing the current treino", async () => {
+    await env.DB.prepare("UPDATE exercise_catalog SET is_active = 0 WHERE id_exercicio = ?")
+      .bind("Crucifixo")
+      .run();
+
+    const result = await save("Ficha A", "Treino A", [{ id_exercicio: "Crucifixo" }]);
+
+    expect(result.status).toBe(422);
+    expect(result.body.code).toBe("INVALID_EXERCISE");
+    expect(await rowsFor("Treino A")).toEqual([
+      expect.objectContaining({ id_exercicio: "Remada baixa", ordem_exercicio: 1 }),
+    ]);
+  });
 });

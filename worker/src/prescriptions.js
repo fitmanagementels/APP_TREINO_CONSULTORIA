@@ -1,10 +1,11 @@
 const PRESCRIPTION_COLUMNS = `
-  id_ficha, id_treino, id_exercicio, id_exercicio AS nome_exercicio,
-  observacoes, ordem_exercicio,
-  semana_1_sets, semana_1_reps, semana_1_descanso,
-  semana_2_sets, semana_2_reps, semana_2_descanso,
-  semana_3_sets, semana_3_reps, semana_3_descanso,
-  semana_4_sets, semana_4_reps, semana_4_descanso
+  prescription.id_ficha, prescription.id_treino, prescription.id_exercicio,
+  prescription.id_exercicio AS nome_exercicio,
+  prescription.observacoes, prescription.ordem_exercicio,
+  prescription.semana_1_sets, prescription.semana_1_reps, prescription.semana_1_descanso,
+  prescription.semana_2_sets, prescription.semana_2_reps, prescription.semana_2_descanso,
+  prescription.semana_3_sets, prescription.semana_3_reps, prescription.semana_3_descanso,
+  prescription.semana_4_sets, prescription.semana_4_reps, prescription.semana_4_descanso
 `;
 
 function sortedUnique(values) {
@@ -68,8 +69,11 @@ export async function getPrescricaoData(db) {
   const { results } = await db
     .prepare(`
       SELECT ${PRESCRIPTION_COLUMNS}
-      FROM prescription_exercises
-      ORDER BY id_ficha COLLATE NOCASE, id_treino COLLATE NOCASE, ordem_exercicio ASC
+      FROM prescription_exercises AS prescription
+      INNER JOIN exercise_catalog AS catalog
+        ON catalog.id_exercicio = prescription.id_exercicio
+       AND catalog.is_active = 1
+      ORDER BY prescription.id_ficha COLLATE NOCASE, prescription.id_treino COLLATE NOCASE, prescription.ordem_exercicio ASC
     `)
     .all();
 
@@ -84,14 +88,18 @@ export async function getPrescricaoData(db) {
 export async function getDemandaMuscularData(db) {
   const [catalogResult, demandsResult] = await db.batch([
     db.prepare(`
-      SELECT id_exercicio, grupo_principal, tipo
+      SELECT id_exercicio, video_url, grupo_principal, categoria_articular, tipo
       FROM exercise_catalog
+      WHERE is_active = 1
       ORDER BY id_exercicio COLLATE NOCASE
     `),
     db.prepare(`
-      SELECT id_exercicio, muscle_name, demand
-      FROM exercise_muscle_demands
-      ORDER BY muscle_name COLLATE NOCASE, id_exercicio COLLATE NOCASE
+      SELECT demands.id_exercicio, demands.muscle_name, demands.demand
+      FROM exercise_muscle_demands AS demands
+      INNER JOIN exercise_catalog AS catalog
+        ON catalog.id_exercicio = demands.id_exercicio
+       AND catalog.is_active = 1
+      ORDER BY demands.muscle_name COLLATE NOCASE, demands.id_exercicio COLLATE NOCASE
     `),
   ]);
   const demandsByExercise = new Map();
@@ -108,7 +116,9 @@ export async function getDemandaMuscularData(db) {
   const rows = catalogResult.results.map((exercise) => ({
     nome: exercise.id_exercicio,
     id_exercicio: exercise.id_exercicio,
+    video_url: exercise.video_url,
     grupo_principal: exercise.grupo_principal,
+    categoria_articular: exercise.categoria_articular,
     tipo: exercise.tipo,
     demandas: demandsByExercise.get(exercise.id_exercicio) || {},
   }));
@@ -164,7 +174,7 @@ export async function savePrescricaoTreino(db, idFicha, idTreino, payload) {
   if (exerciseIds.length > 0) {
     const placeholders = exerciseIds.map(() => "?").join(",");
     const { results } = await db
-      .prepare(`SELECT id_exercicio FROM exercise_catalog WHERE id_exercicio IN (${placeholders})`)
+      .prepare(`SELECT id_exercicio FROM exercise_catalog WHERE is_active = 1 AND id_exercicio IN (${placeholders})`)
       .bind(...exerciseIds)
       .all();
     const catalogIds = new Set(results.map((row) => row.id_exercicio));
