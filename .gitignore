@@ -1,6 +1,7 @@
 node_modules/
 .dev.vars
 .wrangler/
+.superpowers/
 wrangler.jsonc
 worker/public/
 data-import/*
