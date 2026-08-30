@@ -13,6 +13,17 @@ const csvFixture = [
   'Agachamento com barra livre,https://video.example/agachamento,Quadríceps,Multiarticular,,1,1,"0,25"',
   "Desenvolvimento com halteres sentado,https://video.example/desenvolvimento,Ombros,Multiarticular,Composto,0,0,0",
 ].join("\n");
+const muscleHeaders = [
+  "Glúteos", "Posterior", "Quadríceps", "Panturrilha", "Peitoral", "Dorsal", "Deltóide anterior",
+  "Deltóide lateral", "Deltóide posterior", "Bíceps", "Tríceps", "Antebraço", "Abdomen", "Eretores",
+];
+const largeCsvFixture = [
+  ["Exercício", "Link do vídeo", "Grupo muscular", "N-articulação", "Tipo"].concat(muscleHeaders).join(","),
+  "Agachamento com barra livre,,Quadríceps,Multiarticular,," + muscleHeaders.map(() => "1").join(","),
+  "Desenvolvimento com halteres sentado,,Ombros,Multiarticular,," + muscleHeaders.map(() => "0").join(","),
+].concat(Array.from({ length: 88 }, (_, index) => (
+  "Exercício de carga " + (index + 1) + ",,Grupo,Monoarticular,," + muscleHeaders.map(() => "0.5").join(",")
+))).join("\n");
 
 function csvResponse(csvText) {
   return new Response(csvText, { status: 200, headers: { "content-type": "text/csv" } });
@@ -152,5 +163,18 @@ describe("reference exercise catalog", () => {
       activeExerciseCount: 2,
       lastError: "",
     });
+  });
+
+  it("synchronizes a source with the current catalog scale and all muscle columns", async () => {
+    await seedOldCatalogAndRecords();
+
+    const result = await syncReferenceCatalog({
+      db: env.DB,
+      fetchReference: async () => csvResponse(largeCsvFixture),
+      now: fixedNow,
+    });
+
+    expect(result).toMatchObject({ changed: true, activeExerciseCount: 90, substitutionsApplied: 2 });
+    expect(await activeCatalogNames()).toHaveLength(90);
   });
 });

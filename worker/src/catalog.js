@@ -183,7 +183,7 @@ function chunks(values, size) {
 }
 
 function buildCatalogUpserts(db, catalog, sourceUpdatedAt) {
-  return chunks(catalog, 20).map((group) => {
+  return chunks(catalog, 16).map((group) => {
     const values = group.map(() => "(?, ?, ?, ?, ?, 1, ?)").join(", ");
     const parameters = group.flatMap((exercise) => [
       exercise.id_exercicio,
@@ -328,9 +328,12 @@ export async function syncReferenceCatalog({ db, fetchReference = () => fetch(RE
       lastSuccessAt: attemptedAt,
     };
   } catch (error) {
+    if (!(error instanceof CatalogSyncError)) {
+      console.error("[xsteam catalog sync]", error);
+    }
     const syncError = error instanceof CatalogSyncError
       ? error
-      : new CatalogSyncError("REFERENCE_CATALOG_FETCH_FAILED", "Não foi possível sincronizar a planilha de referência.");
+      : new CatalogSyncError("CATALOG_SYNC_FAILED", "Não foi possível sincronizar a planilha de referência.");
     await recordFailure(db, attemptedAt, syncError);
     throw syncError;
   }
