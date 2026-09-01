@@ -316,9 +316,9 @@
 
       <section class="quick-grid" aria-label="Resumo rápido">
         <div class="card"><strong>Objetivo</strong><span>Prescrever, executar e acompanhar treinos no Cloudflare gratuito, sem Apps Script como backend.</span></div>
-        <div class="card"><strong>Etapa atual</strong><span>Sessão única prescrita/livre implementada, com D1, rascunho offline e login Google.</span></div>
-        <div class="card"><strong>Onde parei</strong><span>RER em 0,5, revisão, PSE, finalização e cancelamento estão validados localmente.</span></div>
-        <div class="card"><strong>Próxima ação</strong><span>Aplicar a migração D1, publicar o Worker e executar o aceite autenticado.</span></div>
+        <div class="card"><strong>Etapa atual</strong><span>Sessão única prescrita/livre publicada, com D1, rascunho offline e login Google.</span></div>
+        <div class="card"><strong>Onde parei</strong><span>Migração e Worker publicados; proteção e tela Google verificadas na URL atual.</span></div>
+        <div class="card"><strong>Próxima ação</strong><span>Executar o aceite funcional com a conta Google autorizada.</span></div>
       </section>
 
       <aside class="callout">
@@ -353,7 +353,8 @@
           <div class="status-list">
             <div class="status-item"><strong>Verificado</strong>Worker, D1, login, catálogo e ciclo de vida da sessão possuem testes no repositório.</div>
             <div class="status-item"><strong>Treino</strong>Início prescrito/livre, rascunho offline, RER, revisão, finalização e cancelamento.</div>
-            <div class="status-item pending"><strong>Pendente</strong>Aplicar a migração remota, publicar e executar o aceite com a conta Google autorizada.</div>
+            <div class="status-item"><strong>Publicado</strong>Migração 0003 e Worker publicados em 1º de setembro de 2026.</div>
+            <div class="status-item pending"><strong>Pendente</strong>Executar o aceite funcional com a conta Google autorizada.</div>
           </div>
           <p>O procedimento de operação e aceite está em <code>docs/guias-operacionais/08-sessao-treino-e-treino-livre.md</code>.</p>
         </div>
@@ -439,10 +440,8 @@
         <summary>Próximos passos</summary>
         <div class="section-body">
           <ol>
-            <li>Aplicar as migrações pendentes no D1 remoto.</li>
-            <li>Gerar os assets e publicar o Worker.</li>
-            <li>Confirmar o status do banco e que as rotas continuam protegidas sem login.</li>
             <li>Executar o aceite do Guia 08 com uma sessão prescrita e uma sessão livre.</li>
+            <li>Confirmar Histórico e Carga depois de finalizar a sessão prescrita.</li>
             <li>Depois do aceite, implementar ciclos dinâmicos e cronograma de periodização.</li>
           </ol>
         </div>
@@ -478,7 +477,7 @@
         <div class="section-body">
           <ul>
             <li><strong>Objetivo essencial:</strong> PWA de treinos rápido, offline-first e seguro no Cloudflare gratuito.</li>
-            <li><strong>Estado atual:</strong> Worker, D1, login, catálogo e sessão explícita estão implementados no repositório.</li>
+            <li><strong>Estado atual:</strong> Worker, D1, login, catálogo e sessão explícita estão publicados.</li>
             <li><strong>Não desfazer:</strong> design atual, Histórico/Carga, catálogo exclusivo, RER em português e sessão única.</li>
             <li><strong>Próxima ação:</strong> publicar, testar o fluxo autenticado e depois criar a periodização dinâmica.</li>
             <li><strong>Antes de agir:</strong> confirmar a versão e as migrações no painel Cloudflare.</li>

@@ -8,7 +8,7 @@ Este documento é a fonte de continuidade do projeto. Ele registra o estado atua
 
 - O PWA está em transição de Google Apps Script/Sheets para **Cloudflare Worker + D1**, usando a camada gratuita e a URL `workers.dev`.
 - A arquitetura atual é **single tenant** e o acesso é protegido por login Google e cookie de sessão seguro.
-- Cloudflare já serve frontend e API; D1 guarda catálogo, prescrições, execuções e, com a migração `0003`, o ciclo de vida das sessões de treino.
+- Cloudflare serve frontend e API; D1 guarda catálogo, prescrições, execuções e o ciclo de vida das sessões de treino.
 - A planilha pública permanece apenas como fonte editorial do catálogo de exercícios. O navegador não a consulta durante o uso diário.
 - As abas **Histórico** e **Carga** não foram redesenhadas. Sessões finalizadas são convertidas para o formato de execução que essas telas já consomem.
 - A aba **Treino** agora possui início explícito, uma única sessão ativa, treino prescrito/livre, rascunho offline, RER em intervalos de `0,5`, revisão, PSE e finalização.
@@ -121,13 +121,20 @@ O botão **Atualizar catálogo**, na aba Prescrever, solicita que o Worker leia 
 - Verificação real no navegador em viewport móvel do estado ativo, séries completas/parciais, RER decimal e modal de finalização.
 - Suíte Worker: 13 arquivos e 69 testes aprovados antes da publicação.
 
+## Publicação Cloudflare
+
+- Em 1º de setembro de 2026, `0003_training_sessions.sql` foi aplicada com sucesso no D1 remoto `xsteam-pwa-staging`.
+- A consulta posterior confirmou as três novas tabelas e informou que não existem migrações pendentes.
+- O Worker `xsteam-pwa` foi publicado em <https://xsteam-pwa.fitmanagement-els.workers.dev>.
+- A página e os assets responderam `200`; `/api/status` respondeu `401 AUTH_REQUIRED` sem login, como esperado.
+- O navegador móvel carregou a tela protegida e o botão Google sem erro de console.
+- O aceite funcional autenticado ainda precisa ser realizado com a conta Google autorizada; as credenciais não foram solicitadas nem extraídas durante a automação.
+
 ## Próxima ação
 
-1. Aplicar as migrações pendentes no D1 remoto.
-2. Gerar os assets e publicar o Worker.
-3. Confirmar `/api/status` e a proteção das rotas sem autenticação.
-4. Com a conta Google autorizada, executar o aceite do [Guia 08](guias-operacionais/08-sessao-treino-e-treino-livre.md).
-5. Somente depois iniciar a etapa de ciclos dinâmicos e cronograma de periodização.
+1. Com a conta Google autorizada, executar o aceite do [Guia 08](guias-operacionais/08-sessao-treino-e-treino-livre.md).
+2. Confirmar no uso real um treino prescrito finalizado e um treino livre cancelado.
+3. Somente depois iniciar a etapa de ciclos dinâmicos e cronograma de periodização.
 
 ## Evoluções posteriores
 
@@ -174,6 +181,6 @@ O botão **Atualizar catálogo**, na aba Prescrever, solicita que o Worker leia 
 ## Contexto para outro chat ou IA
 
 - **Objetivo essencial:** migrar todas as funções básicas do PWA para Cloudflare sem custo, em single tenant.
-- **Estado funcional:** autenticação Google, D1, catálogo, prescrição, execução e análises existentes; ciclo de vida explícito da sessão implementado no código.
+- **Estado funcional:** autenticação Google, D1, catálogo, prescrição, execução e ciclo de vida explícito da sessão estão publicados.
 - **Não desfazer:** design atual, Histórico/Carga, catálogo exclusivo, RER em português, rascunho offline e sessão única.
 - **Próxima ação de produto:** validar o fluxo publicado; depois implementar ciclos dinâmicos e cronograma de periodização.
