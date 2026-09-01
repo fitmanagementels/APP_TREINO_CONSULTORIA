@@ -60,6 +60,11 @@ function xsShiftDateKey(value, days) {
   return xsDateKey(date);
 }
 
+function xsCapitalizeFirst(value) {
+  var text = String(value || "");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
 function xsSelectOptions(values, selected, includeAll) {
   var html = includeAll ? '<option value="">Todos</option>' : "";
   (values || []).forEach(function (value) {
@@ -835,10 +840,12 @@ var App = {
     var grid = document.getElementById("training-calendar-grid");
     var html = "";
     if (title) {
-      title.textContent = firstDay.toLocaleDateString("pt-BR", {
-        month: "long",
-        year: "numeric"
-      });
+      title.textContent = xsCapitalizeFirst(
+        firstDay.toLocaleDateString("pt-BR", {
+          month: "long",
+          year: "numeric"
+        })
+      );
     }
     for (var index = 0; index < 42; index++) {
       var current = new Date(

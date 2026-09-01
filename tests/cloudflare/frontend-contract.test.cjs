@@ -113,6 +113,9 @@ test("training date opens a fully themed monthly calendar", () => {
   assert.match(script, /selectTrainingToday:\s*function/);
   assert.match(style, /\.training-calendar-overlay/);
   assert.match(style, /\.training-calendar-day\.is-selected/);
+  const titleStyle = style.match(/\.training-calendar-header h2\s*\{[\s\S]*?\}/);
+  assert.ok(titleStyle);
+  assert.doesNotMatch(titleStyle[0], /text-transform:\s*capitalize/);
 });
 
 test("active training sessions save offline drafts with RER and complete through PSE", () => {

@@ -30,6 +30,11 @@ test("date helpers cross month and year without UTC drift", () => {
   );
 });
 
+test("calendar month title capitalizes only its first letter", () => {
+  assert.equal(typeof context.xsCapitalizeFirst, "function");
+  assert.equal(context.xsCapitalizeFirst("setembro de 2026"), "Setembro de 2026");
+});
+
 test("cycle selector updates the existing currentWeek state and closes", () => {
   context.document.getElementById = () => null;
   context.App.currentWeek = 1;

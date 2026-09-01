@@ -14,9 +14,13 @@ Este guia descreve o fluxo atual da aba **Treino** no PWA Cloudflare. Ele substi
 
 1. Abra a aba **Treino**.
 2. Deixe selecionado **Treino prescrito**.
-3. Escolha a ficha, o treino, o ciclo e a data.
-4. Toque em **Iniciar treino**.
-5. A seleção é bloqueada e a tela passa a mostrar apenas a sessão em andamento.
+3. Na linha seguinte, escolha **Ficha**, **Treino** e **Ciclo**. As três caixas usam o visual do PWA e o ciclo escolhido continua vinculado à prescrição selecionada.
+4. Escolha a data na faixa logo abaixo:
+   - use `‹` ou `›` para voltar ou avançar um dia;
+   - toque no nome do dia e na data para abrir o calendário mensal;
+   - dentro do calendário, navegue entre os meses ou use **Hoje** para retornar à data atual.
+5. Toque em **Iniciar treino**.
+6. A seleção é bloqueada e a tela passa a mostrar apenas a sessão em andamento.
 
 Se a página for fechada ou recarregada, a mesma sessão é recuperada. Não é possível abrir outra ficha enquanto ela estiver ativa.
 
@@ -24,9 +28,10 @@ Se a página for fechada ou recarregada, a mesma sessão é recuperada. Não é 
 
 1. Abra a aba **Treino**.
 2. Selecione **Treino livre**.
-3. Escolha a data e toque em **Iniciar treino**.
-4. Toque em **+ Adicionar exercício**.
-5. Escolha um exercício do catálogo oficial.
+3. A linha de Ficha, Treino e Ciclo fica oculta, pois não se aplica ao treino livre.
+4. Escolha a data pelas setas ou pelo calendário e toque em **Iniciar treino**.
+5. Toque em **+ Adicionar exercício**.
+6. Escolha um exercício do catálogo oficial.
 
 Somente exercícios ativos sincronizados da planilha de referência podem ser adicionados. O treino livre não altera nenhuma prescrição.
 
