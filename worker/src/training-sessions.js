@@ -528,3 +528,171 @@ export async function saveTrainingSessionSets(db, sessionId, payload, options = 
   await db.batch(statements);
   return getTrainingSessionById(db, session.id);
 }
+
+function executionIdentity(session) {
+  const shortId = session.id.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 12);
+  if (session.mode === "free") {
+    return {
+      id_ficha: "Livre",
+      id_treino: `TreinoLivre-${shortId}`,
+      cycle: "0",
+      shortId,
+    };
+  }
+  return {
+    id_ficha: session.id_ficha,
+    id_treino: session.id_treino,
+    cycle: String(session.cycle_reference),
+    shortId,
+  };
+}
+
+function legacyDate(isoValue) {
+  const parts = isoValue.split("-");
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function setCompletionState(set) {
+  const fields = [set.load_value, set.repetitions, set.rer];
+  const filled = fields.filter((value) => value !== null).length;
+  if (filled === 0) return "empty";
+  if (filled === fields.length) return "complete";
+  return "partial";
+}
+
+async function publishedSetCount(db, sessionId) {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM execution_records
+    WHERE training_session_id = ?
+  `).bind(sessionId).first();
+  return Number(row && row.count) || 0;
+}
+
+async function completedResult(db, sessionId) {
+  return {
+    session: await getTrainingSessionById(db, sessionId),
+    publishedSetCount: await publishedSetCount(db, sessionId),
+  };
+}
+
+export async function completeTrainingSession(db, sessionId, payload, options = {}) {
+  const session = await getTrainingSessionById(db, text(sessionId));
+  if (!session) {
+    throw new TrainingSessionError("SESSION_NOT_FOUND", "Sessão não encontrada.");
+  }
+  if (session.status === "completed") {
+    return completedResult(db, session.id);
+  }
+  if (session.status !== "in_progress") {
+    throw new TrainingSessionError("SESSION_NOT_ACTIVE", "A sessão não está em andamento.");
+  }
+
+  const sessionPse = nullableNumber(payload && payload.session_pse);
+  if (sessionPse === null || !validHalfStep(sessionPse, 1, 10)) {
+    throw new TrainingSessionError(
+      "INVALID_SESSION_PSE",
+      "PSE da sessão deve estar entre 1 e 10, em passos de 0,5.",
+    );
+  }
+
+  const sets = session.exercises.flatMap((exercise) =>
+    exercise.sets.map((set) => ({ ...set, exercise })),
+  );
+  if (sets.some((set) => setCompletionState(set) === "partial")) {
+    throw new TrainingSessionError(
+      "INCOMPLETE_SET",
+      "Existem séries parcialmente preenchidas. Complete ou limpe esses campos.",
+    );
+  }
+  const completeSets = sets.filter((set) => setCompletionState(set) === "complete");
+  if (completeSets.length === 0) {
+    throw new TrainingSessionError(
+      "NO_COMPLETED_SETS",
+      "Preencha pelo menos uma série antes de finalizar.",
+    );
+  }
+
+  const { timestamp } = sessionOptions(options);
+  const identity = executionIdentity(session);
+  const dataTreino = legacyDate(session.session_date);
+  const statements = [];
+  for (const set of completeSets) {
+    const idSessao = [
+      identity.id_ficha,
+      identity.id_treino,
+      set.exercise.id_exercicio,
+      `W${identity.cycle}`,
+      session.session_date,
+      identity.shortId,
+      `S${set.set_order}`,
+    ].join("_");
+    statements.push(db.prepare(`
+      INSERT INTO execution_records (
+        id_sessao, data_treino, id_exercicio, semana_referencia,
+        carga_absoluta, reps_executadas, rir, rpe_sessao,
+        sync_status, training_session_id, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'clean', ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM training_sessions WHERE id = ? AND status = 'in_progress'
+      )
+      ON CONFLICT(id_sessao) DO NOTHING
+    `).bind(
+      idSessao,
+      dataTreino,
+      set.exercise.id_exercicio,
+      identity.cycle,
+      set.load_value,
+      set.repetitions,
+      set.rer,
+      sessionPse,
+      session.id,
+      timestamp,
+      timestamp,
+      session.id,
+    ));
+  }
+  statements.push(db.prepare(`
+    UPDATE training_sessions
+    SET status = 'completed', session_pse = ?, completed_at = ?, updated_at = ?
+    WHERE id = ? AND status = 'in_progress'
+  `).bind(sessionPse, timestamp, timestamp, session.id));
+
+  const results = await db.batch(statements);
+  const transition = results[results.length - 1];
+  const changes = Number(transition && transition.meta && transition.meta.changes) || 0;
+  if (changes === 0) {
+    const current = await getTrainingSessionById(db, session.id);
+    if (current && current.status === "completed") {
+      return completedResult(db, session.id);
+    }
+    throw new TrainingSessionError("SESSION_NOT_ACTIVE", "A sessão não está em andamento.");
+  }
+
+  return completedResult(db, session.id);
+}
+
+export async function cancelTrainingSession(db, sessionId, options = {}) {
+  const session = await getTrainingSessionById(db, text(sessionId));
+  if (!session) {
+    throw new TrainingSessionError("SESSION_NOT_FOUND", "Sessão não encontrada.");
+  }
+  if (session.status === "canceled") return session;
+  if (session.status !== "in_progress") {
+    throw new TrainingSessionError("SESSION_NOT_ACTIVE", "A sessão não está em andamento.");
+  }
+
+  const { timestamp } = sessionOptions(options);
+  const result = await db.prepare(`
+    UPDATE training_sessions
+    SET status = 'canceled', canceled_at = ?, updated_at = ?
+    WHERE id = ? AND status = 'in_progress'
+  `).bind(timestamp, timestamp, session.id).run();
+  const changes = Number(result && result.meta && result.meta.changes) || 0;
+  const current = await getTrainingSessionById(db, session.id);
+  if (changes === 0 && (!current || current.status !== "canceled")) {
+    throw new TrainingSessionError("SESSION_NOT_ACTIVE", "A sessão não está em andamento.");
+  }
+  return current;
+}

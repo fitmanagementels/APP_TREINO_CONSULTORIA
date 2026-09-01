@@ -1,11 +1,15 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  cancelTrainingSession,
+  completeTrainingSession,
   getActiveTrainingSession,
   saveTrainingSessionExercises,
   saveTrainingSessionSets,
   startTrainingSession,
 } from "../../worker/src/training-sessions.js";
+import { getExecucaoData } from "../../worker/src/executions.js";
+import { getGestaoCargaData } from "../../worker/src/load.js";
 
 let generatedId = 0;
 
@@ -59,6 +63,38 @@ function validSet(overrides = {}) {
     repetitions: overrides.repetitions === undefined ? 10 : overrides.repetitions,
     rer: overrides.rer === undefined ? 2 : overrides.rer,
   };
+}
+
+async function seedActiveSessionWithCompleteSet() {
+  const session = await startFreeWithExercise();
+  return saveTrainingSessionSets(env.DB, session.id, {
+    sets: [validSet({ session_exercise_id: session.exercises[0].id, rer: 1.5 })],
+  }, fixedOptions("complete-set"));
+}
+
+async function seedActiveSessionWithCompleteAndEmptySets() {
+  const session = await startFreeWithExercise();
+  return saveTrainingSessionSets(env.DB, session.id, { sets: [
+    validSet({ session_exercise_id: session.exercises[0].id, rer: 1.5 }),
+    {
+      session_exercise_id: session.exercises[0].id,
+      set_order: 2,
+      load_value: null,
+      repetitions: null,
+      rer: null,
+    },
+  ] }, fixedOptions("mixed-sets"));
+}
+
+async function seedPartialSetSession() {
+  const session = await startFreeWithExercise();
+  return saveTrainingSessionSets(env.DB, session.id, { sets: [{
+    session_exercise_id: session.exercises[0].id,
+    set_order: 1,
+    load_value: 20,
+    repetitions: null,
+    rer: 2,
+  }] }, fixedOptions("partial-set"));
 }
 
 beforeEach(async () => {
@@ -269,5 +305,99 @@ describe("training session lifecycle", () => {
     await expect(saveTrainingSessionSets(env.DB, session.id, {
       sets: [validSet({ session_exercise_id: "missing-exercise" })],
     }, fixedOptions("foreign-set"))).rejects.toMatchObject({ code: "INVALID_SET" });
+  });
+
+  it("keeps active drafts out of existing execution and load readers", async () => {
+    await seedActiveSessionWithCompleteSet();
+    expect((await getExecucaoData(env.DB)).rows).toEqual([]);
+    expect((await getGestaoCargaData(env.DB)).sessoes).toEqual([]);
+  });
+
+  it("publishes only complete sets and maps RER to legacy rir", async () => {
+    const session = await seedActiveSessionWithCompleteAndEmptySets();
+    const result = await completeTrainingSession(
+      env.DB,
+      session.id,
+      { session_pse: 8.5 },
+      fixedOptions("complete"),
+    );
+    expect(result.publishedSetCount).toBe(1);
+    const rows = (await getExecucaoData(env.DB)).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      data_treino: "30/08/2026",
+      id_ficha: "Livre",
+      rir: 1.5,
+      rpe_sessao: 8.5,
+    });
+  });
+
+  it("returns the completed result idempotently without duplicating executions", async () => {
+    const session = await seedActiveSessionWithCompleteSet();
+    const first = await completeTrainingSession(
+      env.DB,
+      session.id,
+      { session_pse: 8 },
+      fixedOptions("first-completion"),
+    );
+    const second = await completeTrainingSession(
+      env.DB,
+      session.id,
+      { session_pse: 8 },
+      fixedOptions("second-completion"),
+    );
+    expect(second).toEqual(first);
+    expect((await getExecucaoData(env.DB)).rows).toHaveLength(1);
+  });
+
+  it("rejects partial sets and leaves the session active with no execution rows", async () => {
+    const session = await seedPartialSetSession();
+    await expect(completeTrainingSession(
+      env.DB,
+      session.id,
+      { session_pse: 8 },
+      fixedOptions("partial-completion"),
+    )).rejects.toMatchObject({ code: "INCOMPLETE_SET" });
+    expect(await getActiveTrainingSession(env.DB)).toMatchObject({ id: session.id });
+    expect((await getExecucaoData(env.DB)).rows).toEqual([]);
+  });
+
+  it("rejects completion when every draft row is empty", async () => {
+    const session = await startFreeWithExercise();
+    await saveTrainingSessionSets(env.DB, session.id, { sets: [{
+      session_exercise_id: session.exercises[0].id,
+      set_order: 1,
+      load_value: null,
+      repetitions: null,
+      rer: null,
+    }] }, fixedOptions("empty-set"));
+    await expect(completeTrainingSession(
+      env.DB,
+      session.id,
+      { session_pse: 8 },
+      fixedOptions("empty-completion"),
+    )).rejects.toMatchObject({ code: "NO_COMPLETED_SETS" });
+  });
+
+  it("cancels without publishing and permits a new session", async () => {
+    const session = await seedActiveSessionWithCompleteSet();
+    const canceled = await cancelTrainingSession(
+      env.DB,
+      session.id,
+      fixedOptions("cancel"),
+    );
+    expect(canceled.status).toBe("canceled");
+    expect((await getExecucaoData(env.DB)).rows).toEqual([]);
+    await expect(startFree("after-cancel")).resolves.toMatchObject({ status: "in_progress" });
+  });
+
+  it.each([null, 0.5, 1.25, 10.5])("rejects invalid session PSE %s", async (sessionPse) => {
+    const session = await seedActiveSessionWithCompleteSet();
+    await expect(completeTrainingSession(
+      env.DB,
+      session.id,
+      { session_pse: sessionPse },
+      fixedOptions("invalid-pse"),
+    )).rejects.toMatchObject({ code: "INVALID_SESSION_PSE" });
   });
 });
