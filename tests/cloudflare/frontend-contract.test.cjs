@@ -100,6 +100,21 @@ test("training start orders mode, prescribed context, date navigator and CTA", (
   assert.doesNotMatch(index, /id="treino-cycle-selector"/);
 });
 
+test("training date opens a fully themed monthly calendar", () => {
+  assert.match(index, /id="training-calendar-overlay"/);
+  assert.match(index, /id="training-calendar-title"/);
+  assert.match(index, /id="training-calendar-grid"/);
+  assert.match(index, /id="training-calendar-today"/);
+  assert.match(script, /openTrainingCalendar:\s*function/);
+  assert.match(script, /closeTrainingCalendar:\s*function/);
+  assert.match(script, /changeTrainingCalendarMonth:\s*function/);
+  assert.match(script, /renderTrainingCalendar:\s*function/);
+  assert.match(script, /selectTrainingCalendarDate:\s*function/);
+  assert.match(script, /selectTrainingToday:\s*function/);
+  assert.match(style, /\.training-calendar-overlay/);
+  assert.match(style, /\.training-calendar-day\.is-selected/);
+});
+
 test("active training sessions save offline drafts with RER and complete through PSE", () => {
   assert.match(script, /saveActiveTrainingDraftLocal:\s*function/);
   assert.match(script, /writeCache\("xs_active_training_session"/);

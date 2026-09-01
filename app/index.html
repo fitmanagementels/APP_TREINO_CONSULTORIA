@@ -349,6 +349,54 @@
       </div>
     </div>
 
+    <!-- ═══ TRAINING DATE CALENDAR ═══ -->
+    <div
+      class="training-calendar-overlay"
+      id="training-calendar-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="training-calendar-title"
+      onclick="App.closeTrainingCalendar(event)"
+    >
+      <div class="training-calendar-panel">
+        <div class="training-calendar-header">
+          <button
+            type="button"
+            aria-label="Mês anterior"
+            onclick="App.changeTrainingCalendarMonth(-1)"
+          >
+            ‹
+          </button>
+          <h2 id="training-calendar-title"></h2>
+          <button
+            type="button"
+            aria-label="Próximo mês"
+            onclick="App.changeTrainingCalendarMonth(1)"
+          >
+            ›
+          </button>
+        </div>
+        <div class="training-calendar-weekdays" aria-hidden="true">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span
+          ><span>Sáb</span>
+        </div>
+        <div class="training-calendar-grid" id="training-calendar-grid"></div>
+        <div class="training-calendar-actions">
+          <button
+            type="button"
+            class="btn-ghost"
+            id="training-calendar-today"
+            onclick="App.selectTrainingToday()"
+          >
+            Hoje
+          </button>
+          <button type="button" class="btn-ghost" onclick="App.closeTrainingCalendar()">
+            Voltar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ TRAINING COMPLETION MODAL ═══ -->
     <div class="rpe-modal-overlay" id="training-complete-modal">
       <div class="rpe-modal">

@@ -44,3 +44,16 @@ test("cycle selector updates the existing currentWeek state and closes", () => {
   assert.equal(context.App.currentWeek, 3);
   assert.equal(context.App.trainingOpenSelect, "");
 });
+
+test("calendar selection and Hoje update the existing selectedDate state", () => {
+  context.document.getElementById = () => null;
+  context.App.renderTrainingDate = function renderTrainingDate() {};
+  context.App.closeTrainingCalendar = function closeTrainingCalendar() {};
+  context.App.selectedDate = "2026-09-01";
+
+  context.App.selectTrainingCalendarDate("2026-10-03");
+  assert.equal(context.App.selectedDate, "2026-10-03");
+
+  context.App.selectTrainingToday();
+  assert.equal(context.App.selectedDate, context.xsDateKey(new Date()));
+});

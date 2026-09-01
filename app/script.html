@@ -262,6 +262,7 @@ var App = {
   activeTrainingSession: null,
   trainingMode: "prescribed",
   trainingOpenSelect: "",
+  trainingCalendarMonth: "",
   trainingDraftSyncState: "saved",
   trainingDraftTimer: null,
   trainingDraftRevision: 0,
@@ -777,6 +778,108 @@ var App = {
     if (weekdayElement) weekdayElement.textContent = weekday;
     if (labelElement) labelElement.textContent = label;
     if (dateInput) dateInput.value = this.selectedDate;
+  },
+  openTrainingCalendar: function openTrainingCalendar() {
+    var overlay = document.getElementById("training-calendar-overlay");
+    this.closeTrainingSelects();
+    this.trainingCalendarMonth = String(this.selectedDate || xsDateKey(new Date())).slice(0, 7) + "-01";
+    this.renderTrainingCalendar();
+    if (!overlay) return;
+    overlay.classList.add("show");
+    setTimeout(function () {
+      var selected = overlay.querySelector(".training-calendar-day.is-selected");
+      if (selected) selected.focus();
+      else {
+        var firstDay = overlay.querySelector(".training-calendar-day");
+        if (firstDay) firstDay.focus();
+      }
+    }, 0);
+  },
+  closeTrainingCalendar: function closeTrainingCalendar(event) {
+    var overlay = document.getElementById("training-calendar-overlay");
+    if (event && event.target !== overlay) return;
+    if (overlay) overlay.classList.remove("show");
+    var trigger = document.getElementById("training-date-open");
+    if (trigger && (!event || event.target === overlay)) trigger.focus();
+  },
+  changeTrainingCalendarMonth: function changeTrainingCalendarMonth(offset) {
+    var date = xsParseDateKey(this.trainingCalendarMonth || this.selectedDate);
+    date.setDate(1);
+    date.setMonth(date.getMonth() + Number(offset || 0));
+    this.trainingCalendarMonth = xsDateKey(date);
+    this.renderTrainingCalendar();
+  },
+  selectTrainingCalendarDate: function selectTrainingCalendarDate(value) {
+    this.selectedDate = value;
+    this.trainingCalendarMonth = String(value).slice(0, 7) + "-01";
+    this.renderTrainingDate();
+    this.closeTrainingCalendar();
+  },
+  selectTrainingToday: function selectTrainingToday() {
+    this.selectTrainingCalendarDate(xsDateKey(new Date()));
+  },
+  renderTrainingCalendar: function renderTrainingCalendar() {
+    var viewDate = xsParseDateKey(this.trainingCalendarMonth || this.selectedDate);
+    var firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1, 12, 0, 0, 0);
+    var gridStart = new Date(
+      firstDay.getFullYear(),
+      firstDay.getMonth(),
+      1 - firstDay.getDay(),
+      12,
+      0,
+      0,
+      0
+    );
+    var todayKey = xsDateKey(new Date());
+    var title = document.getElementById("training-calendar-title");
+    var grid = document.getElementById("training-calendar-grid");
+    var html = "";
+    if (title) {
+      title.textContent = firstDay.toLocaleDateString("pt-BR", {
+        month: "long",
+        year: "numeric"
+      });
+    }
+    for (var index = 0; index < 42; index++) {
+      var current = new Date(
+        gridStart.getFullYear(),
+        gridStart.getMonth(),
+        gridStart.getDate() + index,
+        12,
+        0,
+        0,
+        0
+      );
+      var key = xsDateKey(current);
+      var outside = current.getMonth() !== firstDay.getMonth();
+      var selected = key === this.selectedDate;
+      var today = key === todayKey;
+      var className = "training-calendar-day";
+      if (outside) className += " is-outside";
+      if (today) className += " is-today";
+      if (selected) className += " is-selected";
+      var accessibleLabel = current.toLocaleDateString("pt-BR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+      html +=
+        '<button type="button" class="' +
+        className +
+        '" aria-label="' +
+        xsEscapeHtml(accessibleLabel) +
+        '" aria-pressed="' +
+        (selected ? "true" : "false") +
+        '"' +
+        (today ? ' aria-current="date"' : "") +
+        " onclick=\"App.selectTrainingCalendarDate('" +
+        key +
+        "')\">" +
+        current.getDate() +
+        "</button>";
+    }
+    if (grid) grid.innerHTML = html;
   },
   startTrainingSession: function startTrainingSession() {
     var _thisTrainingStart = this;
