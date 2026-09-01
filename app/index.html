@@ -108,44 +108,102 @@
             Treino livre
           </button>
         </div>
-        <div id="treino-prescribed-fields">
-          <div class="week-selector" id="treino-cycle-selector">
+        <div class="training-prescribed-context" id="training-prescribed-context">
+          <div class="training-select-field training-select-field--ficha">
+            <label for="training-ficha-trigger">Ficha</label>
             <button
-              class="week-btn active"
-              data-week="1"
-              onclick="App.changeWeek(1)"
+              type="button"
+              class="training-select-trigger"
+              id="training-ficha-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              onclick="App.toggleTrainingSelect('ficha')"
             >
-              Ciclo 1
+              <span id="training-ficha-value">Selecionar</span>
+              <span aria-hidden="true">⌄</span>
             </button>
-            <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
-              Ciclo 2
+            <div class="training-select-menu" id="training-ficha-menu" role="listbox"></div>
+            <select
+              id="ficha-filter"
+              class="training-native-control"
+              tabindex="-1"
+              aria-hidden="true"
+            ></select>
+          </div>
+          <div class="training-select-field training-select-field--treino">
+            <label for="training-treino-trigger">Treino</label>
+            <button
+              type="button"
+              class="training-select-trigger"
+              id="training-treino-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              onclick="App.toggleTrainingSelect('treino')"
+            >
+              <span id="training-treino-value">Selecionar</span>
+              <span aria-hidden="true">⌄</span>
             </button>
-            <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
-              Ciclo 3
+            <div class="training-select-menu" id="training-treino-menu" role="listbox"></div>
+            <select
+              id="treino-filter"
+              class="training-native-control"
+              tabindex="-1"
+              aria-hidden="true"
+            ></select>
+          </div>
+          <div class="training-select-field training-select-field--cycle">
+            <label for="training-cycle-trigger">Ciclo</label>
+            <button
+              type="button"
+              class="training-select-trigger"
+              id="training-cycle-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              onclick="App.toggleTrainingSelect('cycle')"
+            >
+              <span id="training-cycle-value">1</span>
+              <span aria-hidden="true">⌄</span>
             </button>
-            <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
-              Ciclo 4
-            </button>
+            <div
+              class="training-select-menu training-select-menu--right"
+              id="training-cycle-menu"
+              role="listbox"
+            ></div>
           </div>
         </div>
-        <div class="filters-row training-start-filters">
-          <div class="input-group training-prescribed-field">
-            <label style="color: var(--neon); font-size: 10px">Ficha</label>
-            <select id="ficha-filter" onchange="App.filterFicha()"></select>
-          </div>
-          <div class="input-group training-prescribed-field">
-            <label style="color: var(--neon); font-size: 10px">Treino</label>
-            <select id="treino-filter" onchange="App.filterTreino()"></select>
-          </div>
-          <div class="input-group">
-            <label style="color: var(--neon); font-size: 10px">Data</label>
-            <input
-              type="date"
-              id="treino-date"
-              onchange="App.updateTreinoDate()"
-              style="padding: 12px 4px; font-size: 14px"
-            />
-          </div>
+        <div class="training-date-navigator" id="training-date-navigator">
+          <button
+            type="button"
+            id="training-date-previous"
+            aria-label="Dia anterior"
+            onclick="App.shiftTrainingDate(-1)"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            id="training-date-open"
+            aria-haspopup="dialog"
+            onclick="App.openTrainingCalendar()"
+          >
+            <span id="training-date-weekday"></span>
+            <span id="training-date-label"></span>
+          </button>
+          <button
+            type="button"
+            id="training-date-next"
+            aria-label="Próximo dia"
+            onclick="App.shiftTrainingDate(1)"
+          >
+            ›
+          </button>
+          <input
+            type="date"
+            id="treino-date"
+            class="training-native-control"
+            tabindex="-1"
+            aria-hidden="true"
+          />
         </div>
         <button class="btn-neon" id="treino-start-btn" onclick="App.startTrainingSession()">
           Iniciar treino

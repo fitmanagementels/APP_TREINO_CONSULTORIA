@@ -72,6 +72,23 @@ test("Treino has explicit start and active session states", () => {
   assert.match(script, /loadActiveTrainingSession:\s*function/);
 });
 
+test("training start orders mode, prescribed context, date navigator and CTA", () => {
+  const mode = index.indexOf('class="training-mode-selector"');
+  const context = index.indexOf('id="training-prescribed-context"');
+  const date = index.indexOf('id="training-date-navigator"');
+  const start = index.indexOf('id="treino-start-btn"');
+  assert.ok(mode > -1);
+  assert.ok(context > mode);
+  assert.ok(date > context);
+  assert.ok(start > date);
+  assert.match(index, /id="training-ficha-trigger"/);
+  assert.match(index, /id="training-treino-trigger"/);
+  assert.match(index, /id="training-cycle-trigger"/);
+  assert.match(index, /id="training-date-previous"/);
+  assert.match(index, /id="training-date-open"/);
+  assert.match(index, /id="training-date-next"/);
+});
+
 test("active training sessions save offline drafts with RER and complete through PSE", () => {
   assert.match(script, /saveActiveTrainingDraftLocal:\s*function/);
   assert.match(script, /writeCache\("xs_active_training_session"/);
