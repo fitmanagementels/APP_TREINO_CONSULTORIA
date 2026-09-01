@@ -348,49 +348,26 @@ const tests = [
     },
   ],
   [
-    "treino tab should support day-only exercise overrides",
+    "treino should dispatch between start and active server session states",
     () => {
-      assert.match(script, /catalogMode:\s*"prescrever"/);
-      assert.match(script, /getTreinoOverrideKey\s*:/);
-      assert.match(script, /getTreinoOverrides\s*:/);
-      assert.match(script, /writeTreinoOverrides\s*:/);
-      assert.match(script, /getCurrentTreinoExercises\s*:/);
-      assert.match(script, /skipTreinoExercise\s*:/);
-      assert.match(script, /openTreinoAddExerciseModal\s*:/);
-      assert.match(script, /addTreinoExtraExerciseFromCatalog\s*:/);
       const renderBody = bodyOf(script, "renderTreino");
-      assert.match(renderBody, /getCurrentTreinoExercises\(\)/);
-      assert.match(renderBody, /skipTreinoExercise\(/);
-      assert.match(renderBody, /openTreinoAddExerciseModal\(\)/);
-      const addBody = bodyOf(script, "addCatalogExercise");
-      assert.match(addBody, /catalogMode\s*===\s*"treino"/);
-      assert.match(addBody, /addTreinoExtraExerciseFromCatalog/);
-      const extraBody = bodyOf(script, "addTreinoExtraExerciseFromCatalog");
-      assert.match(extraBody, /writeTreinoOverrides/);
-      assert.doesNotMatch(extraBody, /prescricaoCache\s*=/);
+      assert.match(renderBody, /this\.activeTrainingSession/);
+      assert.match(renderBody, /this\.renderActiveTrainingSession\(\)/);
+      assert.match(renderBody, /this\.renderTrainingStart\(\)/);
+      const startBody = bodyOf(script, "startTrainingSession");
+      assert.match(startBody, /navigator\.onLine/);
+      assert.match(startBody, /ACTIVE_SESSION_EXISTS/);
+      assert.doesNotMatch(startBody, /syncExecucao/);
     },
   ],
   [
-    "removing a treino exercise should clear day pending rows without touching prescription",
+    "Cloudflare transport should preserve structured API errors for session recovery",
     () => {
-      const skipBody = bodyOf(script, "skipTreinoExercise");
-      assert.match(skipBody, /removePendingForTreinoExerciseDay/);
-      assert.match(skipBody, /writeTreinoOverrides/);
-      assert.match(skipBody, /renderTreino\(\)/);
-      assert.doesNotMatch(skipBody, /prescricaoCache\s*=/);
-      const pendingBody = bodyOf(script, "removePendingForTreinoExerciseDay");
-      assert.match(pendingBody, /xs_pending/);
-      assert.match(pendingBody, /writeCache/);
-      assert.match(pendingBody, /selectedDate/);
-    },
-  ],
-  [
-    "saving execution should build session id from selected ficha and treino",
-    () => {
-      const body = bodyOf(script, "saveExecution");
-      assert.doesNotMatch(body, /prescricaoCache\[idx\]/);
-      assert.match(body, /id_ficha:\s*this\.selectedFicha/);
-      assert.match(body, /id_treino:\s*this\.selectedTreino/);
+      const body = bodyOf(script, "fetchServerAction");
+      assert.match(body, /apiError\.status\s*=\s*response\.status/);
+      assert.match(body, /apiError\.code/);
+      assert.match(body, /apiError\.details/);
+      assert.match(body, /getActiveTrainingSession/);
     },
   ],
   [

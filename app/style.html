@@ -705,6 +705,42 @@
     gap: 8px;
     margin-bottom: 20px;
   }
+
+  .training-panel-hidden {
+    display: none !important;
+  }
+
+  .training-mode-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .training-mode-selector .week-btn {
+    min-height: 44px;
+  }
+
+  .training-start-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  #treino-active-summary {
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 520px) {
+    .training-start-filters {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .training-start-filters .input-group:last-child {
+      grid-column: 1 / -1;
+    }
+  }
   .week-btn {
     flex: 1;
     padding: 10px;

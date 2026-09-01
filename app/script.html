@@ -57,7 +57,13 @@ var SERVER_ROUTES = {
   getCatalogStatus: { method: "GET", path: "/api/catalog/status" },
   syncCatalog: { method: "POST", path: "/api/catalog/sync" },
   syncExecucao: { method: "POST", path: "/api/executions/sync" },
-  savePrescricaoTreino: { method: "PUT", path: "/api/prescriptions" }
+  savePrescricaoTreino: { method: "PUT", path: "/api/prescriptions" },
+  getActiveTrainingSession: { method: "GET", path: "/api/training-sessions/active" },
+  startTrainingSession: { method: "POST", path: "/api/training-sessions" },
+  saveTrainingSessionExercises: { method: "PUT", path: "/api/training-sessions" },
+  saveTrainingSessionSets: { method: "PUT", path: "/api/training-sessions" },
+  completeTrainingSession: { method: "POST", path: "/api/training-sessions" },
+  cancelTrainingSession: { method: "POST", path: "/api/training-sessions" }
 };
 
 var Auth = {
@@ -230,6 +236,10 @@ var App = {
   appStatus: null,
   pendingSync: [],
   sessionRPE: null,
+  activeTrainingSession: null,
+  trainingMode: "prescribed",
+  trainingDraftSyncState: "saved",
+  trainingDraftTimer: null,
   selectedChartExercises: null,
   dataWarning: "",
   selectedFicha: "",
@@ -274,14 +284,16 @@ var App = {
   },
   fetchInitialData: function fetchInitialData() {
     var _this2 = this;
-    this.setLoaderStatus("Buscando prescrição e histórico...");
+    this.setLoaderStatus("Buscando prescrição, histórico e sessão ativa...");
     this.dataWarning = "";
     var finalized = false;
     var finishWithCache = function finishWithCache() {
       var cachedPrescricao = _this2.readCache("xs_prescricao", []);
       var cachedHistorico = _this2.readCache("xs_historico", []);
+      var cachedSession = _this2.readCache("xs_active_training_session", null);
       if (cachedPrescricao.length > 0) _this2.prescricaoCache = cachedPrescricao;
       if (cachedHistorico.length > 0) _this2.historicoCache = cachedHistorico;
+      if (cachedSession) _this2.activeTrainingSession = cachedSession;
       if (!finalized) {
         finalized = true;
         _this2.finishInitialRender();
@@ -289,20 +301,28 @@ var App = {
       }
     };
     setTimeout(finishWithCache, 12000);
-    this.readInitialData().then(function (data) {
+    Promise.all([this.readInitialData(), this.loadActiveTrainingSession()]).then(function (values) {
       if (finalized) return;
       finalized = true;
-      _this2.applyInitialData(data);
+      _this2.applyInitialData(values[0]);
+      _this2.activeTrainingSession = values[1] || null;
+      if (_this2.activeTrainingSession) {
+        _this2.writeCache("xs_active_training_session", _this2.activeTrainingSession);
+      }
       _this2.finishInitialRender();
       _this2.loadGestaoCargaInBackground();
     }).catch(function (err) {
       var detail = err && err.message ? " Detalhe: " + err.message : "";
       _this2.prescricaoCache = _this2.readCache("xs_prescricao", []);
       _this2.historicoCache = _this2.readCache("xs_historico", []);
-      _this2.showDataWarning("Falha ao ler dados da planilha. Usando cache local." + detail);
+      _this2.activeTrainingSession = _this2.readCache("xs_active_training_session", null);
+      _this2.showDataWarning("Falha ao ler dados do serviço. Usando cache local." + detail);
       _this2.finishInitialRender();
       console.error("[XSTeam initial data]", err);
     });
+  },
+  loadActiveTrainingSession: function loadActiveTrainingSession() {
+    return this.callApi("getActiveTrainingSession");
   },
   readInitialData: function readInitialData() {
     var boot = window.__XS_BOOTSTRAP__;
@@ -380,6 +400,22 @@ var App = {
       url += "/" + encodeURIComponent(payload.id_ficha) + "/" + encodeURIComponent(payload.id_treino);
       bodyPayload = { exercicios: payload.exercicios || [] };
     }
+    var sessionSuffixes = {
+      saveTrainingSessionExercises: "exercises",
+      saveTrainingSessionSets: "sets",
+      completeTrainingSession: "complete",
+      cancelTrainingSession: "cancel"
+    };
+    if (sessionSuffixes[action]) {
+      if (!payload || !payload.session_id) {
+        return Promise.reject(new Error("Sessão de treino obrigatória."));
+      }
+      url += "/" + encodeURIComponent(payload.session_id) + "/" + sessionSuffixes[action];
+      bodyPayload = {};
+      Object.keys(payload).forEach(function (key) {
+        if (key !== "session_id") bodyPayload[key] = payload[key];
+      });
+    }
     var options = route.method === "GET" ? {
       method: route.method,
       credentials: "same-origin",
@@ -400,15 +436,23 @@ var App = {
         return null;
       }).then(function (result) {
         if (!response.ok) {
-          throw new Error(result && result.error || "HTTP " + response.status);
+          var apiError = new Error(result && result.error || "HTTP " + response.status);
+          apiError.status = response.status;
+          apiError.code = result && result.code || "HTTP_ERROR";
+          apiError.details = result && result.details || {};
+          throw apiError;
         }
         return result;
       });
     }).then(function (result) {
       if (!result || result.success === false) {
-        throw new Error(result && result.error || "Falha em " + action);
+        var apiError = new Error(result && result.error || "Falha em " + action);
+        apiError.status = 200;
+        apiError.code = result && result.code || "API_ERROR";
+        apiError.details = result && result.details || {};
+        throw apiError;
       }
-      if (result.success === true && result.data === null && action.indexOf("get") === 0) {
+      if (result.success === true && result.data === null && action.indexOf("get") === 0 && action !== "getActiveTrainingSession") {
         throw new Error("Resposta vazia em " + action);
       }
       return result.data !== undefined ? result.data : result;
@@ -556,6 +600,107 @@ var App = {
   loadTreino: function loadTreino() {
     this.renderTreino();
   },
+  setTrainingMode: function setTrainingMode(mode) {
+    this.trainingMode = mode === "free" ? "free" : "prescribed";
+    this.renderTrainingStart();
+  },
+  renderTreino: function renderTreino() {
+    if (this.activeTrainingSession) {
+      this.renderActiveTrainingSession();
+    } else {
+      this.renderTrainingStart();
+    }
+  },
+  renderTrainingStart: function renderTrainingStart() {
+    var startPanel = document.getElementById("treino-start-panel");
+    var activePanel = document.getElementById("treino-active-panel");
+    var prescribedButton = document.getElementById("treino-mode-prescribed");
+    var freeButton = document.getElementById("treino-mode-free");
+    var cycleSelector = document.getElementById("treino-prescribed-fields");
+    var prescribedMode = this.trainingMode !== "free";
+    if (startPanel) startPanel.classList.remove("training-panel-hidden");
+    if (activePanel) activePanel.classList.add("training-panel-hidden");
+    if (prescribedButton) prescribedButton.classList[prescribedMode ? "add" : "remove"]("active");
+    if (freeButton) freeButton.classList[prescribedMode ? "remove" : "add"]("active");
+    if (cycleSelector) cycleSelector.classList[prescribedMode ? "remove" : "add"]("training-panel-hidden");
+    xsEachNode(document.querySelectorAll(".training-prescribed-field"), function (field) {
+      field.classList[prescribedMode ? "remove" : "add"]("training-panel-hidden");
+    });
+    var dateInput = document.getElementById("treino-date");
+    if (dateInput && this.selectedDate) dateInput.value = this.selectedDate;
+  },
+  startTrainingSession: function startTrainingSession() {
+    var _thisTrainingStart = this;
+    if (!navigator.onLine) {
+      this.showToast("Conecte-se à internet para iniciar o treino", "warning");
+      return;
+    }
+    var payload = {
+      mode: this.trainingMode,
+      session_date: this.selectedDate
+    };
+    if (this.trainingMode === "prescribed") {
+      if (!this.selectedFicha || !this.selectedTreino || !this.currentWeek) {
+        this.showToast("Selecione ficha, treino e ciclo", "warning");
+        return;
+      }
+      payload.id_ficha = this.selectedFicha;
+      payload.id_treino = this.selectedTreino;
+      payload.cycle_reference = this.currentWeek;
+    }
+    var button = document.getElementById("treino-start-btn");
+    if (button) button.disabled = true;
+    this.callApi("startTrainingSession", payload).then(function (session) {
+      _thisTrainingStart.activeTrainingSession = session;
+      _thisTrainingStart.writeCache("xs_active_training_session", session);
+      _thisTrainingStart.renderTreino();
+      _thisTrainingStart.showToast("Treino iniciado", "success");
+    }).catch(function (error) {
+      if (error && error.code === "ACTIVE_SESSION_EXISTS" && error.details && error.details.activeSession) {
+        _thisTrainingStart.activeTrainingSession = error.details.activeSession;
+        _thisTrainingStart.writeCache("xs_active_training_session", error.details.activeSession);
+        _thisTrainingStart.renderTreino();
+        _thisTrainingStart.showToast("Sessão em andamento recuperada", "warning");
+        return;
+      }
+      _thisTrainingStart.showToast(error.message || "Não foi possível iniciar o treino", "error");
+    }).then(function () {
+      if (button) button.disabled = false;
+    });
+  },
+  formatTrainingSessionDate: function formatTrainingSessionDate(value) {
+    var parts = String(value || "").split("-");
+    if (parts.length !== 3) return value || "";
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  },
+  renderActiveTrainingSession: function renderActiveTrainingSession() {
+    var session = this.activeTrainingSession;
+    if (!session) return;
+    var startPanel = document.getElementById("treino-start-panel");
+    var activePanel = document.getElementById("treino-active-panel");
+    if (startPanel) startPanel.classList.add("training-panel-hidden");
+    if (activePanel) activePanel.classList.remove("training-panel-hidden");
+    var summary = document.getElementById("treino-active-summary");
+    var modeLabel = session.mode === "free" ? "Treino livre" : "Treino prescrito";
+    var identity = session.mode === "free"
+      ? "Exercícios escolhidos durante a sessão"
+      : xsEscapeHtml(session.id_ficha) + " · " + xsEscapeHtml(session.id_treino) + " · Ciclo " + session.cycle_reference;
+    if (summary) {
+      summary.innerHTML = '<div class="ex-header"><div><div class="ex-order">EM ANDAMENTO</div><div class="ex-name">' + modeLabel + '</div></div></div><div class="ex-obs">' + this.formatTrainingSessionDate(session.session_date) + " · " + identity + "</div>";
+    }
+    var container = document.getElementById("treino-list");
+    var exercises = session.exercises || [];
+    if (!container) return;
+    if (exercises.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🏋️</div><div class="empty-text">Nenhum exercício nesta sessão</div></div>';
+      return;
+    }
+    var html = "";
+    exercises.forEach(function (exercise) {
+      html += '<div class="exercise-card"><div class="ex-header"><div><span class="ex-order">#' + exercise.exercise_order + '</span><span class="ex-name">' + xsEscapeHtml(exercise.id_exercicio) + '</span></div></div><div class="ex-meta"><div class="meta-item"><div class="meta-label">Séries</div><div class="meta-value">' + xsEscapeHtml(exercise.expected_sets || "-") + '</div></div><div class="meta-item"><div class="meta-label">Reps</div><div class="meta-value">' + xsEscapeHtml(exercise.expected_reps || "-") + '</div></div><div class="meta-item"><div class="meta-label">Descanso</div><div class="meta-value">' + xsEscapeHtml(exercise.expected_rest || "-") + "</div></div></div></div>";
+    });
+    container.innerHTML = html;
+  },
   getTreinoOverrideKey: function getTreinoOverrideKey() {
     return [
       this.selectedDate || "SEM_DATA",
@@ -600,7 +745,7 @@ var App = {
     });
     return exs;
   },
-  renderTreino: function renderTreino() {
+  renderLegacyTreino: function renderLegacyTreino() {
     var _this8 = this;
     var c = document.getElementById("treino-list");
     var exs = this.getCurrentTreinoExercises();

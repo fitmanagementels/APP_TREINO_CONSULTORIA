@@ -55,3 +55,19 @@ test("only the public Google client id belongs in the Worker config template", (
   assert.match(wranglerExample, /GOOGLE_CLIENT_ID/);
   assert.doesNotMatch(wranglerExample, /ALLOWED_GOOGLE_EMAIL|SESSION_SECRET/);
 });
+
+test("Treino has explicit start and active session states", () => {
+  assert.match(index, /id="treino-start-panel"/);
+  assert.match(index, /id="treino-mode-prescribed"/);
+  assert.match(index, /id="treino-mode-free"/);
+  assert.match(index, /id="treino-start-btn"/);
+  assert.match(index, /id="treino-active-panel"/);
+  assert.match(index, /id="treino-active-summary"/);
+  assert.match(script, /getActiveTrainingSession:\s*\{\s*method:\s*"GET"/);
+  assert.match(script, /startTrainingSession:\s*\{\s*method:\s*"POST"/);
+  assert.match(script, /activeTrainingSession:\s*null/);
+  assert.match(script, /trainingMode:\s*"prescribed"/);
+  assert.match(script, /renderTrainingStart:\s*function/);
+  assert.match(script, /renderActiveTrainingSession:\s*function/);
+  assert.match(script, /loadActiveTrainingSession:\s*function/);
+});

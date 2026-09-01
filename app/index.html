@@ -90,56 +90,74 @@
     <!-- TELA 1: EXECUÇÃO (Treino Offline-First)                -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="screen active" id="screen-treino">
-      <div class="week-selector">
-        <button
-          class="week-btn active"
-          data-week="1"
-          onclick="App.changeWeek(1)"
-        >
-          Ciclo 1
-        </button>
-        <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
-          Ciclo 2
-        </button>
-        <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
-          Ciclo 3
-        </button>
-        <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
-          Ciclo 4
+      <div id="treino-start-panel">
+        <div class="section-title">Iniciar treino</div>
+        <div class="training-mode-selector" aria-label="Modalidade do treino">
+          <button
+            class="week-btn active"
+            id="treino-mode-prescribed"
+            onclick="App.setTrainingMode('prescribed')"
+          >
+            Treino prescrito
+          </button>
+          <button
+            class="week-btn"
+            id="treino-mode-free"
+            onclick="App.setTrainingMode('free')"
+          >
+            Treino livre
+          </button>
+        </div>
+        <div id="treino-prescribed-fields">
+          <div class="week-selector" id="treino-cycle-selector">
+            <button
+              class="week-btn active"
+              data-week="1"
+              onclick="App.changeWeek(1)"
+            >
+              Ciclo 1
+            </button>
+            <button class="week-btn" data-week="2" onclick="App.changeWeek(2)">
+              Ciclo 2
+            </button>
+            <button class="week-btn" data-week="3" onclick="App.changeWeek(3)">
+              Ciclo 3
+            </button>
+            <button class="week-btn" data-week="4" onclick="App.changeWeek(4)">
+              Ciclo 4
+            </button>
+          </div>
+        </div>
+        <div class="filters-row training-start-filters">
+          <div class="input-group training-prescribed-field">
+            <label style="color: var(--neon); font-size: 10px">Ficha</label>
+            <select id="ficha-filter" onchange="App.filterFicha()"></select>
+          </div>
+          <div class="input-group training-prescribed-field">
+            <label style="color: var(--neon); font-size: 10px">Treino</label>
+            <select id="treino-filter" onchange="App.filterTreino()"></select>
+          </div>
+          <div class="input-group">
+            <label style="color: var(--neon); font-size: 10px">Data</label>
+            <input
+              type="date"
+              id="treino-date"
+              onchange="App.updateTreinoDate()"
+              style="padding: 12px 4px; font-size: 14px"
+            />
+          </div>
+        </div>
+        <button class="btn-neon" id="treino-start-btn" onclick="App.startTrainingSession()">
+          Iniciar treino
         </button>
       </div>
-      <!-- Filtros de Treino na Mesma Linha -->
-      <div
-        class="filters-row"
-        style="
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 8px;
-          margin-bottom: 20px;
-        "
-      >
-        <div class="input-group">
-          <label style="color: var(--neon); font-size: 10px">Ficha</label>
-          <select id="ficha-filter" onchange="App.filterFicha()"></select>
+      <div id="treino-active-panel" class="training-panel-hidden">
+        <div id="treino-active-summary" class="exercise-card"></div>
+        <div class="section-title">Sessão de treino</div>
+        <div id="treino-list">
+          <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
+          <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
         </div>
-        <div class="input-group">
-          <label style="color: var(--neon); font-size: 10px">Treino</label>
-          <select id="treino-filter" onchange="App.filterTreino()"></select>
-        </div>
-        <div class="input-group">
-          <label style="color: var(--neon); font-size: 10px">Data</label>
-          <input
-            type="date"
-            id="treino-date"
-            onchange="App.updateTreinoDate()"
-            style="padding: 12px 4px; font-size: 14px"
-          />
-        </div>
-      </div>
-      <div class="section-title">Sessão de Treino</div>
-      <div id="treino-list">
-        <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
-        <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
       </div>
     </div>
 
