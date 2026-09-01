@@ -263,3 +263,268 @@ export async function startTrainingSession(db, payload, options = {}) {
 
   return getTrainingSessionById(db, sessionId);
 }
+
+async function requireActiveSession(db, sessionId) {
+  const session = await getTrainingSessionById(db, text(sessionId));
+  if (!session) {
+    throw new TrainingSessionError("SESSION_NOT_FOUND", "Sessão não encontrada.");
+  }
+  if (session.status !== "in_progress") {
+    throw new TrainingSessionError("SESSION_NOT_ACTIVE", "A sessão não está em andamento.");
+  }
+  return session;
+}
+
+async function activeCatalogIds(db, exerciseIds) {
+  if (exerciseIds.length === 0) return new Set();
+  const placeholders = exerciseIds.map(() => "?").join(",");
+  const { results } = await db.prepare(`
+    SELECT id_exercicio
+    FROM exercise_catalog
+    WHERE is_active = 1 AND id_exercicio IN (${placeholders})
+  `).bind(...exerciseIds).all();
+  return new Set(results.map((row) => row.id_exercicio));
+}
+
+export async function saveTrainingSessionExercises(db, sessionId, payload, options = {}) {
+  const session = await requireActiveSession(db, sessionId);
+  if (!payload || !Array.isArray(payload.exercises)) {
+    throw new TrainingSessionError("INVALID_PAYLOAD", "Lista de exercícios inválida.");
+  }
+  const { timestamp, idFactory } = sessionOptions(options);
+  const existingById = new Map(session.exercises.map((exercise) => [exercise.id, exercise]));
+  const usedIds = new Set();
+  const usedExerciseNames = new Set();
+  const normalized = [];
+
+  for (let index = 0; index < payload.exercises.length; index += 1) {
+    const candidate = payload.exercises[index] || {};
+    const candidateId = text(candidate.id);
+    const existing = candidateId ? existingById.get(candidateId) : null;
+    if (candidateId && !existing) {
+      throw new TrainingSessionError("INVALID_EXERCISE", "Exercício não pertence à sessão.");
+    }
+    if (candidateId && usedIds.has(candidateId)) {
+      throw new TrainingSessionError("INVALID_EXERCISE", "Exercício repetido na sessão.");
+    }
+
+    const id_exercicio = existing ? existing.id_exercicio : text(candidate.id_exercicio);
+    if (!id_exercicio || (existing && text(candidate.id_exercicio) && text(candidate.id_exercicio) !== id_exercicio)) {
+      throw new TrainingSessionError("INVALID_EXERCISE", "Exercício inválido para a sessão.");
+    }
+    if (usedExerciseNames.has(id_exercicio)) {
+      throw new TrainingSessionError("INVALID_EXERCISE", "Exercício repetido na sessão.");
+    }
+
+    const id = existing ? existing.id : idFactory();
+    usedIds.add(id);
+    usedExerciseNames.add(id_exercicio);
+    normalized.push({
+      id,
+      id_exercicio,
+      exercise_order: index + 1,
+      source: existing ? existing.source : "session",
+      observations: text(candidate.observations),
+      expected_sets: existing ? existing.expected_sets : "",
+      expected_reps: existing ? existing.expected_reps : "",
+      expected_rest: existing ? existing.expected_rest : "",
+      existing: Boolean(existing),
+    });
+  }
+
+  const newExerciseNames = normalized
+    .filter((exercise) => !exercise.existing)
+    .map((exercise) => exercise.id_exercicio);
+  const catalogIds = await activeCatalogIds(db, newExerciseNames);
+  const inactiveName = newExerciseNames.find((exerciseId) => !catalogIds.has(exerciseId));
+  if (inactiveName) {
+    throw new TrainingSessionError(
+      "INVALID_EXERCISE",
+      `Exercício fora do catálogo ativo: ${inactiveName}.`,
+    );
+  }
+
+  const statements = [
+    db.prepare(`
+      UPDATE training_session_exercises
+      SET exercise_order = exercise_order + 100000, updated_at = ?
+      WHERE session_id = ?
+    `).bind(timestamp, session.id),
+  ];
+  for (const exercise of normalized) {
+    if (exercise.existing) {
+      statements.push(db.prepare(`
+        UPDATE training_session_exercises
+        SET exercise_order = ?, observations = ?, updated_at = ?
+        WHERE id = ? AND session_id = ?
+      `).bind(
+        exercise.exercise_order,
+        exercise.observations,
+        timestamp,
+        exercise.id,
+        session.id,
+      ));
+    } else {
+      statements.push(db.prepare(`
+        INSERT INTO training_session_exercises (
+          id, session_id, id_exercicio, exercise_order, source, observations,
+          expected_sets, expected_reps, expected_rest, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'session', ?, '', '', '', ?, ?)
+      `).bind(
+        exercise.id,
+        session.id,
+        exercise.id_exercicio,
+        exercise.exercise_order,
+        exercise.observations,
+        timestamp,
+        timestamp,
+      ));
+    }
+  }
+  if (usedIds.size === 0) {
+    statements.push(
+      db.prepare("DELETE FROM training_session_exercises WHERE session_id = ?").bind(session.id),
+    );
+  } else {
+    const placeholders = [...usedIds].map(() => "?").join(",");
+    statements.push(db.prepare(`
+      DELETE FROM training_session_exercises
+      WHERE session_id = ? AND id NOT IN (${placeholders})
+    `).bind(session.id, ...usedIds));
+  }
+
+  await db.batch(statements);
+  return getTrainingSessionById(db, session.id);
+}
+
+function nullableNumber(value) {
+  return value === "" || value === null || value === undefined ? null : Number(value);
+}
+
+function validHalfStep(value, min, max) {
+  return Number.isFinite(value)
+    && value >= min
+    && value <= max
+    && Number.isInteger(value * 2);
+}
+
+export async function saveTrainingSessionSets(db, sessionId, payload, options = {}) {
+  const session = await requireActiveSession(db, sessionId);
+  if (!payload || !Array.isArray(payload.sets)) {
+    throw new TrainingSessionError("INVALID_PAYLOAD", "Lista de séries inválida.");
+  }
+  const { timestamp, idFactory } = sessionOptions(options);
+  const exerciseIds = new Set(session.exercises.map((exercise) => exercise.id));
+  const existingSets = session.exercises.flatMap((exercise) => exercise.sets);
+  const existingById = new Map(existingSets.map((set) => [set.id, set]));
+  const usedIds = new Set();
+  const usedOrders = new Set();
+  const normalized = [];
+
+  for (const candidateValue of payload.sets) {
+    const candidate = candidateValue || {};
+    const candidateId = text(candidate.id);
+    const existing = candidateId ? existingById.get(candidateId) : null;
+    if (candidateId && !existing) {
+      throw new TrainingSessionError("INVALID_SET", "Série não pertence à sessão.");
+    }
+    if (candidateId && usedIds.has(candidateId)) {
+      throw new TrainingSessionError("INVALID_SET", "Série repetida na sessão.");
+    }
+
+    const session_exercise_id = text(candidate.session_exercise_id);
+    if (
+      !exerciseIds.has(session_exercise_id)
+      || (existing && existing.session_exercise_id !== session_exercise_id)
+    ) {
+      throw new TrainingSessionError("INVALID_SET", "Exercício da série é inválido.");
+    }
+    const set_order = Number(candidate.set_order);
+    const orderKey = `${session_exercise_id}:${set_order}`;
+    if (!Number.isInteger(set_order) || set_order <= 0 || usedOrders.has(orderKey)) {
+      throw new TrainingSessionError("INVALID_SET", "Ordem da série é inválida.");
+    }
+
+    const load_value = nullableNumber(candidate.load_value);
+    const repetitions = nullableNumber(candidate.repetitions);
+    const rer = nullableNumber(candidate.rer);
+    if (load_value !== null && (!Number.isFinite(load_value) || load_value < 0)) {
+      throw new TrainingSessionError("INVALID_SET", "Carga da série é inválida.");
+    }
+    if (repetitions !== null && (!Number.isInteger(repetitions) || repetitions <= 0)) {
+      throw new TrainingSessionError("INVALID_SET", "Repetições da série são inválidas.");
+    }
+    if (rer !== null && !validHalfStep(rer, 0, 10)) {
+      throw new TrainingSessionError("INVALID_RER", "RER deve estar entre 0 e 10, em passos de 0,5.");
+    }
+
+    const id = existing ? existing.id : idFactory();
+    usedIds.add(id);
+    usedOrders.add(orderKey);
+    normalized.push({
+      id,
+      session_exercise_id,
+      set_order,
+      load_value,
+      repetitions,
+      rer,
+      existing: Boolean(existing),
+    });
+  }
+
+  const statements = [
+    db.prepare(`
+      UPDATE training_session_sets
+      SET set_order = set_order + 100000, updated_at = ?
+      WHERE session_id = ?
+    `).bind(timestamp, session.id),
+  ];
+  for (const set of normalized) {
+    if (set.existing) {
+      statements.push(db.prepare(`
+        UPDATE training_session_sets
+        SET set_order = ?, load_value = ?, repetitions = ?, rer = ?, updated_at = ?
+        WHERE id = ? AND session_id = ?
+      `).bind(
+        set.set_order,
+        set.load_value,
+        set.repetitions,
+        set.rer,
+        timestamp,
+        set.id,
+        session.id,
+      ));
+    } else {
+      statements.push(db.prepare(`
+        INSERT INTO training_session_sets (
+          id, session_id, session_exercise_id, set_order,
+          load_value, repetitions, rer, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        set.id,
+        session.id,
+        set.session_exercise_id,
+        set.set_order,
+        set.load_value,
+        set.repetitions,
+        set.rer,
+        timestamp,
+        timestamp,
+      ));
+    }
+  }
+  if (usedIds.size === 0) {
+    statements.push(
+      db.prepare("DELETE FROM training_session_sets WHERE session_id = ?").bind(session.id),
+    );
+  } else {
+    const placeholders = [...usedIds].map(() => "?").join(",");
+    statements.push(db.prepare(`
+      DELETE FROM training_session_sets
+      WHERE session_id = ? AND id NOT IN (${placeholders})
+    `).bind(session.id, ...usedIds));
+  }
+
+  await db.batch(statements);
+  return getTrainingSessionById(db, session.id);
+}

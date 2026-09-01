@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   getActiveTrainingSession,
+  saveTrainingSessionExercises,
+  saveTrainingSessionSets,
   startTrainingSession,
 } from "../../worker/src/training-sessions.js";
 
@@ -40,6 +42,23 @@ async function startFree(prefix = "free") {
     { mode: "free", session_date: "2026-08-30" },
     fixedOptions(prefix),
   );
+}
+
+async function startFreeWithExercise() {
+  const session = await startFree("draft-session");
+  return saveTrainingSessionExercises(env.DB, session.id, {
+    exercises: [{ id_exercicio: "Supino reto", observations: "", source: "session" }],
+  }, fixedOptions("draft-exercise"));
+}
+
+function validSet(overrides = {}) {
+  return {
+    session_exercise_id: overrides.session_exercise_id,
+    set_order: overrides.set_order || 1,
+    load_value: overrides.load_value === undefined ? 20 : overrides.load_value,
+    repetitions: overrides.repetitions === undefined ? 10 : overrides.repetitions,
+    rer: overrides.rer === undefined ? 2 : overrides.rer,
+  };
 }
 
 beforeEach(async () => {
@@ -156,5 +175,99 @@ describe("training session lifecycle", () => {
       code: "ACTIVE_SESSION_EXISTS",
       details: { activeSession: expect.any(Object) },
     });
+  });
+
+  it("adds active catalog exercises and preserves ids while reordering", async () => {
+    const session = await startFree();
+    const updated = await saveTrainingSessionExercises(env.DB, session.id, {
+      exercises: [
+        { id_exercicio: "Supino reto", observations: "", source: "session" },
+        { id_exercicio: "Remada baixa", observations: "", source: "session" },
+      ],
+    }, fixedOptions("exercise"));
+    const reordered = await saveTrainingSessionExercises(env.DB, session.id, {
+      exercises: updated.exercises.slice().reverse(),
+    }, fixedOptions("reorder"));
+    expect(reordered.exercises.map((row) => row.id)).toEqual(
+      updated.exercises.map((row) => row.id).reverse(),
+    );
+  });
+
+  it("rejects a new exercise that is inactive in the catalog", async () => {
+    const session = await startFree();
+    await env.DB.prepare("UPDATE exercise_catalog SET is_active = 0 WHERE id_exercicio = ?")
+      .bind("Supino reto")
+      .run();
+    await expect(saveTrainingSessionExercises(env.DB, session.id, {
+      exercises: [{ id_exercicio: "Supino reto", observations: "" }],
+    }, fixedOptions("inactive"))).rejects.toMatchObject({ code: "INVALID_EXERCISE" });
+  });
+
+  it("removes omitted exercises and their set drafts", async () => {
+    const session = await startFreeWithExercise();
+    const exerciseId = session.exercises[0].id;
+    await saveTrainingSessionSets(env.DB, session.id, {
+      sets: [validSet({ session_exercise_id: exerciseId })],
+    }, fixedOptions("remove-set"));
+    const emptied = await saveTrainingSessionExercises(
+      env.DB,
+      session.id,
+      { exercises: [] },
+      fixedOptions("remove-exercise"),
+    );
+    expect(emptied.exercises).toEqual([]);
+    expect((await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM training_session_sets WHERE session_id = ?",
+    ).bind(session.id).first()).count).toBe(0);
+  });
+
+  it("accepts complete, empty and half-step RER drafts", async () => {
+    const session = await startFreeWithExercise();
+    const exerciseId = session.exercises[0].id;
+    const updated = await saveTrainingSessionSets(env.DB, session.id, { sets: [
+      {
+        session_exercise_id: exerciseId,
+        set_order: 1,
+        load_value: 0,
+        repetitions: 12,
+        rer: 1.5,
+      },
+      {
+        session_exercise_id: exerciseId,
+        set_order: 2,
+        load_value: null,
+        repetitions: null,
+        rer: null,
+      },
+    ] }, fixedOptions("set"));
+    expect(updated.exercises[0].sets).toHaveLength(2);
+    expect(updated.exercises[0].sets[0]).toMatchObject({ load_value: 0, rer: 1.5 });
+  });
+
+  it("allows partial set drafts before finalization", async () => {
+    const session = await startFreeWithExercise();
+    const updated = await saveTrainingSessionSets(env.DB, session.id, { sets: [{
+      session_exercise_id: session.exercises[0].id,
+      set_order: 1,
+      load_value: 20,
+      repetitions: null,
+      rer: 2,
+    }] }, fixedOptions("partial"));
+    expect(updated.exercises[0].sets[0].repetitions).toBeNull();
+  });
+
+  it.each([-0.5, 0.25, 10.5])("rejects invalid RER %s", async (rer) => {
+    const session = await startFreeWithExercise();
+    const sessionExerciseId = session.exercises[0].id;
+    await expect(saveTrainingSessionSets(env.DB, session.id, {
+      sets: [validSet({ session_exercise_id: sessionExerciseId, rer })],
+    }, fixedOptions("invalid-set"))).rejects.toMatchObject({ code: "INVALID_RER" });
+  });
+
+  it("rejects a set that points to another session exercise", async () => {
+    const session = await startFreeWithExercise();
+    await expect(saveTrainingSessionSets(env.DB, session.id, {
+      sets: [validSet({ session_exercise_id: "missing-exercise" })],
+    }, fixedOptions("foreign-set"))).rejects.toMatchObject({ code: "INVALID_SET" });
   });
 });
