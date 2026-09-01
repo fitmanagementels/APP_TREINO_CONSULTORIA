@@ -158,6 +158,17 @@
           <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
           <div class="skeleton" style="height: 180px; margin-bottom: 12px"></div>
         </div>
+        <div class="training-session-actions">
+          <button class="btn-ghost" id="training-add-exercise-btn" onclick="App.openTreinoAddExerciseModal()">
+            + Adicionar exercício
+          </button>
+          <button class="btn-neon" id="training-review-btn" onclick="App.openTrainingCompletion()">
+            Revisar e finalizar
+          </button>
+          <button class="btn-ghost training-cancel-btn" onclick="App.cancelActiveTrainingSession()">
+            Cancelar sessão
+          </button>
+        </div>
       </div>
     </div>
 
@@ -277,6 +288,33 @@
       <div id="carga-charts">
         <div class="skeleton" style="height: 220px; margin-bottom: 16px"></div>
         <div class="skeleton" style="height: 220px; margin-bottom: 16px"></div>
+      </div>
+    </div>
+
+    <!-- ═══ TRAINING COMPLETION MODAL ═══ -->
+    <div class="rpe-modal-overlay" id="training-complete-modal">
+      <div class="rpe-modal">
+        <h2>Finalizar sessão</h2>
+        <p id="training-completion-review"></p>
+        <label for="training-session-pse">PSE da sessão</label>
+        <div class="rpe-big" id="training-session-pse-value">5</div>
+        <input
+          type="range"
+          class="rpe-slider"
+          min="1"
+          max="10"
+          step="0.5"
+          value="5"
+          id="training-session-pse"
+          oninput="App.updateTrainingPseDisplay(this.value)"
+        />
+        <div class="rpe-scale">1 = Muito fácil &nbsp;│&nbsp; 10 = Máximo</div>
+        <button class="btn-neon" style="margin-top: 16px" onclick="App.completeActiveTrainingSession()">
+          Confirmar finalização
+        </button>
+        <button class="btn-ghost" style="margin-top: 8px" onclick="App.closeTrainingCompletion()">
+          Voltar ao treino
+        </button>
       </div>
     </div>
 

@@ -732,6 +732,31 @@
     margin-bottom: 16px;
   }
 
+  .training-session-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .training-cancel-btn {
+    color: var(--danger);
+  }
+
+  .training-sync-state {
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .set-row.training-set-incomplete {
+    padding: 6px;
+    border: 1px solid rgba(255, 68, 68, 0.58);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 68, 68, 0.06);
+  }
+
   @media (max-width: 520px) {
     .training-start-filters {
       grid-template-columns: 1fr 1fr;

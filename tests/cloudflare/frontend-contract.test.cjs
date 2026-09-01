@@ -71,3 +71,18 @@ test("Treino has explicit start and active session states", () => {
   assert.match(script, /renderActiveTrainingSession:\s*function/);
   assert.match(script, /loadActiveTrainingSession:\s*function/);
 });
+
+test("active training sessions save offline drafts with RER and complete through PSE", () => {
+  assert.match(script, /saveActiveTrainingDraftLocal:\s*function/);
+  assert.match(script, /writeCache\("xs_active_training_session"/);
+  assert.match(script, /scheduleTrainingDraftSync:\s*function/);
+  assert.match(script, /flushTrainingDraft:\s*function/);
+  assert.match(script, /catalogMode\s*=\s*"training-session"/);
+  assert.match(script, /step="0\.5"[^\n]*placeholder="RER"/);
+  assert.match(index, /id="training-complete-modal"/);
+  assert.match(index, /id="training-session-pse"/);
+  assert.match(index, /id="training-completion-review"/);
+  assert.match(script, /completeActiveTrainingSession:\s*function/);
+  assert.match(script, /cancelActiveTrainingSession:\s*function/);
+  assert.match(script, /reconcileTrainingSession:\s*function/);
+});

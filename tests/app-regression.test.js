@@ -371,10 +371,38 @@ const tests = [
     },
   ],
   [
-    "changing session RPE should mark affected rows pending for resync",
+    "active training cards should use session drafts and Portuguese RER fields",
     () => {
-      const body = bodyOf(script, "confirmSessionRPE");
-      assert.match(body, /sync_status\s*=\s*"pending"/);
+      const body = bodyOf(script, "renderActiveTrainingSession");
+      assert.match(body, /activeTrainingSession/);
+      assert.match(body, /exercise\.sets/);
+      assert.match(body, /placeholder="RER"/);
+      assert.match(body, /step="0\.5"/);
+      assert.doesNotMatch(body, /prescricaoCache/);
+      assert.doesNotMatch(body, /placeholder="RIR"/);
+    },
+  ],
+  [
+    "offline training flush should persist exercises before remapped sets",
+    () => {
+      const body = bodyOf(script, "flushTrainingDraft");
+      const exerciseSave = body.indexOf('callApi("saveTrainingSessionExercises"');
+      const setSave = body.indexOf('callApi("saveTrainingSessionSets"');
+      assert.ok(exerciseSave > -1, "exercise draft save should exist");
+      assert.ok(setSave > exerciseSave, "set draft save should follow exercise id remapping");
+      assert.match(body, /trainingDraftRevision/);
+    },
+  ],
+  [
+    "completion should require connectivity and flush drafts before publication",
+    () => {
+      const body = bodyOf(script, "completeActiveTrainingSession");
+      assert.match(body, /navigator\.onLine/);
+      assert.ok(
+        body.indexOf("flushTrainingDraft") < body.indexOf('callApi("completeTrainingSession"'),
+        "draft flush should happen before completion",
+      );
+      assert.match(body, /localStorage\.removeItem\("xs_active_training_session"\)/);
     },
   ],
   [
