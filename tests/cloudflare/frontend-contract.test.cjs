@@ -6,6 +6,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..", "..");
 const script = fs.readFileSync(path.join(root, "app", "script.html"), "utf8");
 const index = fs.readFileSync(path.join(root, "app", "index.html"), "utf8");
+const style = fs.readFileSync(path.join(root, "app", "style.html"), "utf8");
 const wranglerExample = fs.readFileSync(path.join(root, "wrangler.jsonc.example"), "utf8");
 
 test("active PWA source uses only same-origin Cloudflare API routes", () => {
@@ -91,6 +92,12 @@ test("training start orders mode, prescribed context, date navigator and CTA", (
   assert.ok(renderStart);
   assert.match(renderStart[0], /training-prescribed-context/);
   assert.doesNotMatch(renderStart[0], /treino-prescribed-fields/);
+  assert.match(script, /toggleTrainingSelect:\s*function/);
+  assert.match(script, /selectTrainingOption:\s*function/);
+  assert.match(script, /renderTrainingSelectors:\s*function/);
+  assert.match(style, /\.training-select-trigger/);
+  assert.match(style, /\.training-select-menu\.show/);
+  assert.doesNotMatch(index, /id="treino-cycle-selector"/);
 });
 
 test("active training sessions save offline drafts with RER and complete through PSE", () => {

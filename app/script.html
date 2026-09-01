@@ -261,6 +261,7 @@ var App = {
   sessionRPE: null,
   activeTrainingSession: null,
   trainingMode: "prescribed",
+  trainingOpenSelect: "",
   trainingDraftSyncState: "saved",
   trainingDraftTimer: null,
   trainingDraftRevision: 0,
@@ -613,6 +614,24 @@ var App = {
         _this7.closeDemandModal();
       });
     }
+    document.addEventListener("click", function (event) {
+      if (!_this7.trainingOpenSelect) return;
+      var current = event.target;
+      var insideTrainingSelect = false;
+      while (current && current !== document) {
+        if (current.classList && current.classList.contains("training-select-field")) {
+          insideTrainingSelect = true;
+          break;
+        }
+        current = current.parentNode;
+      }
+      if (!insideTrainingSelect) _this7.closeTrainingSelects();
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return;
+      _this7.closeTrainingSelects();
+      if (_this7.closeTrainingCalendar) _this7.closeTrainingCalendar();
+    });
   },
   switchScreen: function switchScreen(screenId) {
     this.currentScreen = screenId;
@@ -637,6 +656,7 @@ var App = {
   },
   setTrainingMode: function setTrainingMode(mode) {
     this.trainingMode = mode === "free" ? "free" : "prescribed";
+    this.trainingOpenSelect = "";
     this.renderTrainingStart();
   },
   renderTreino: function renderTreino() {
@@ -658,7 +678,86 @@ var App = {
     if (prescribedButton) prescribedButton.classList[prescribedMode ? "add" : "remove"]("active");
     if (freeButton) freeButton.classList[prescribedMode ? "remove" : "add"]("active");
     if (prescribedContext) prescribedContext.classList[prescribedMode ? "remove" : "add"]("training-panel-hidden");
+    this.renderTrainingSelectors();
     this.renderTrainingDate();
+  },
+  trainingSelectOptions: function trainingSelectOptions(kind) {
+    if (kind === "cycle") {
+      return [
+        { value: "1", label: "1" },
+        { value: "2", label: "2" },
+        { value: "3", label: "3" },
+        { value: "4", label: "4" }
+      ];
+    }
+    var control = document.getElementById(kind === "ficha" ? "ficha-filter" : "treino-filter");
+    var options = [];
+    if (!control || !control.options) return options;
+    for (var index = 0; index < control.options.length; index++) {
+      options.push({
+        value: control.options[index].value,
+        label: control.options[index].textContent || control.options[index].value
+      });
+    }
+    return options;
+  },
+  trainingSelectedValue: function trainingSelectedValue(kind) {
+    if (kind === "ficha") return this.selectedFicha;
+    if (kind === "treino") return this.selectedTreino;
+    return String(this.currentWeek || 1);
+  },
+  renderTrainingSelectors: function renderTrainingSelectors() {
+    var _thisTrainingSelectors = this;
+    ["ficha", "treino", "cycle"].forEach(function (kind) {
+      var selected = String(_thisTrainingSelectors.trainingSelectedValue(kind) || "");
+      var options = _thisTrainingSelectors.trainingSelectOptions(kind);
+      var valueElement = document.getElementById("training-" + kind + "-value");
+      var menu = document.getElementById("training-" + kind + "-menu");
+      var trigger = document.getElementById("training-" + kind + "-trigger");
+      var selectedLabel = "Selecionar";
+      var html = "";
+      options.forEach(function (option) {
+        var active = String(option.value) === selected;
+        if (active) selectedLabel = option.label;
+        html += '<button type="button" class="training-select-option' + (active ? " active" : "") + '" role="option" aria-selected="' + (active ? "true" : "false") + '" onclick="App.selectTrainingOption(\'' + kind + "','" + xsEscapeJsString(option.value) + "')\">" + xsEscapeHtml(option.label) + "</button>";
+      });
+      if (!html) html = '<div class="training-select-empty">Nenhuma opção disponível</div>';
+      if (valueElement) valueElement.textContent = selectedLabel;
+      if (menu) {
+        menu.innerHTML = html;
+        menu.classList[_thisTrainingSelectors.trainingOpenSelect === kind ? "add" : "remove"]("show");
+      }
+      if (trigger) {
+        trigger.setAttribute("aria-expanded", _thisTrainingSelectors.trainingOpenSelect === kind ? "true" : "false");
+        trigger.disabled = options.length === 0;
+      }
+    });
+  },
+  toggleTrainingSelect: function toggleTrainingSelect(kind) {
+    this.trainingOpenSelect = this.trainingOpenSelect === kind ? "" : kind;
+    this.renderTrainingSelectors();
+  },
+  closeTrainingSelects: function closeTrainingSelects() {
+    if (!this.trainingOpenSelect) return;
+    this.trainingOpenSelect = "";
+    this.renderTrainingSelectors();
+  },
+  selectTrainingOption: function selectTrainingOption(kind, value) {
+    this.trainingOpenSelect = "";
+    if (kind === "ficha") {
+      var fichaControl = document.getElementById("ficha-filter");
+      if (fichaControl) fichaControl.value = value;
+      this.filterFicha();
+    } else if (kind === "treino") {
+      var treinoControl = document.getElementById("treino-filter");
+      if (treinoControl) treinoControl.value = value;
+      this.filterTreino();
+    } else if (kind === "cycle") {
+      this.changeWeek(Number(value));
+    }
+    this.renderTrainingSelectors();
+    var trigger = document.getElementById("training-" + kind + "-trigger");
+    if (trigger) trigger.focus();
   },
   shiftTrainingDate: function shiftTrainingDate(days) {
     this.selectedDate = xsShiftDateKey(this.selectedDate, days);

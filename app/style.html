@@ -721,11 +721,225 @@
     min-height: 44px;
   }
 
-  .training-start-filters {
+  .training-prescribed-context {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: minmax(0, 34fr) minmax(0, 42fr) minmax(0, 24fr);
     gap: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
+  }
+
+  .training-select-field {
+    position: relative;
+    min-width: 0;
+  }
+
+  .training-select-field label {
+    display: block;
+    margin: 0 0 6px;
+    color: var(--neon);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+  }
+
+  .training-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    appearance: none;
+    background: rgba(255, 255, 255, 0.018);
+    color: var(--text-primary);
+    font-family: "Inter", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+
+  .training-select-trigger > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .training-select-trigger > span:last-child {
+    flex: 0 0 auto;
+    color: var(--neon-soft);
+    font-size: 14px;
+    transition: transform 0.2s ease;
+  }
+
+  .training-select-trigger[aria-expanded="true"] {
+    border-color: rgba(57, 255, 20, 0.58);
+    background: rgba(57, 255, 20, 0.06);
+    box-shadow: inset 0 0 18px rgba(57, 255, 20, 0.04);
+  }
+
+  .training-select-trigger[aria-expanded="true"] > span:last-child {
+    transform: rotate(180deg);
+  }
+
+  .training-select-trigger:focus-visible {
+    outline: 2px solid var(--neon);
+    outline-offset: 2px;
+  }
+
+  .training-select-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .training-select-menu {
+    position: absolute;
+    z-index: 80;
+    top: calc(100% + 6px);
+    left: 0;
+    width: max-content;
+    min-width: 100%;
+    max-width: calc(100vw - 32px);
+    max-height: 240px;
+    padding: 5px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: var(--radius-sm);
+    background: #101610;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.48);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-5px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .training-select-menu--right {
+    right: 0;
+    left: auto;
+  }
+
+  .training-select-menu.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .training-select-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .training-select-option:hover,
+  .training-select-option:focus-visible {
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .training-select-option.active {
+    border-color: rgba(57, 255, 20, 0.34);
+    background: rgba(57, 255, 20, 0.09);
+    color: var(--neon-soft);
+  }
+
+  .training-select-empty {
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .training-native-control {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    pointer-events: none !important;
+  }
+
+  .training-date-navigator {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) 46px;
+    min-height: 58px;
+    margin-bottom: 18px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.018);
+  }
+
+  .training-date-navigator button {
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: "Inter", sans-serif;
+    cursor: pointer;
+  }
+
+  #training-date-previous,
+  #training-date-next {
+    color: var(--neon-soft);
+    font-size: 28px;
+  }
+
+  #training-date-open {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.055);
+    border-left: 1px solid rgba(255, 255, 255, 0.055);
+  }
+
+  #training-date-weekday {
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  #training-date-label {
+    margin-top: 3px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .training-date-navigator button:hover {
+    background: rgba(57, 255, 20, 0.045);
+    color: var(--neon);
+  }
+
+  .training-date-navigator button:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--neon);
+    outline-offset: -2px;
   }
 
   #treino-active-summary {
@@ -757,15 +971,6 @@
     background: rgba(255, 68, 68, 0.06);
   }
 
-  @media (max-width: 520px) {
-    .training-start-filters {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .training-start-filters .input-group:last-child {
-      grid-column: 1 / -1;
-    }
-  }
   .week-btn {
     flex: 1;
     padding: 10px;

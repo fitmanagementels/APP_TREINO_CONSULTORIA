@@ -29,3 +29,18 @@ test("date helpers cross month and year without UTC drift", () => {
     "2026-09-01",
   );
 });
+
+test("cycle selector updates the existing currentWeek state and closes", () => {
+  context.document.getElementById = () => null;
+  context.App.currentWeek = 1;
+  context.App.trainingOpenSelect = "cycle";
+  context.App.changeWeek = function changeWeek(value) {
+    this.currentWeek = value;
+  };
+  context.App.renderTrainingSelectors = function renderTrainingSelectors() {};
+
+  context.App.selectTrainingOption("cycle", "3");
+
+  assert.equal(context.App.currentWeek, 3);
+  assert.equal(context.App.trainingOpenSelect, "");
+});
