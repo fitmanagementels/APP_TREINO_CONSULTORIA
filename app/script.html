@@ -37,6 +37,29 @@ function xsEscapeJsString(value) {
     .replace(/\r?\n/g, " ");
 }
 
+function xsParseDateKey(value) {
+  var parts = String(value || "").split("-");
+  if (parts.length !== 3) return new Date();
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 12, 0, 0, 0);
+}
+
+function xsPad2(value) {
+  return ("0" + value).slice(-2);
+}
+
+function xsDateKey(date) {
+  var year = date.getFullYear();
+  var month = xsPad2(date.getMonth() + 1);
+  var day = xsPad2(date.getDate());
+  return year + "-" + month + "-" + day;
+}
+
+function xsShiftDateKey(value, days) {
+  var date = xsParseDateKey(value);
+  date.setDate(date.getDate() + Number(days || 0));
+  return xsDateKey(date);
+}
+
 function xsSelectOptions(values, selected, includeAll) {
   var html = includeAll ? '<option value="">Todos</option>' : "";
   (values || []).forEach(function (value) {
@@ -628,18 +651,33 @@ var App = {
     var activePanel = document.getElementById("treino-active-panel");
     var prescribedButton = document.getElementById("treino-mode-prescribed");
     var freeButton = document.getElementById("treino-mode-free");
-    var cycleSelector = document.getElementById("treino-prescribed-fields");
+    var prescribedContext = document.getElementById("training-prescribed-context");
     var prescribedMode = this.trainingMode !== "free";
     if (startPanel) startPanel.classList.remove("training-panel-hidden");
     if (activePanel) activePanel.classList.add("training-panel-hidden");
     if (prescribedButton) prescribedButton.classList[prescribedMode ? "add" : "remove"]("active");
     if (freeButton) freeButton.classList[prescribedMode ? "remove" : "add"]("active");
-    if (cycleSelector) cycleSelector.classList[prescribedMode ? "remove" : "add"]("training-panel-hidden");
-    xsEachNode(document.querySelectorAll(".training-prescribed-field"), function (field) {
-      field.classList[prescribedMode ? "remove" : "add"]("training-panel-hidden");
+    if (prescribedContext) prescribedContext.classList[prescribedMode ? "remove" : "add"]("training-panel-hidden");
+    this.renderTrainingDate();
+  },
+  shiftTrainingDate: function shiftTrainingDate(days) {
+    this.selectedDate = xsShiftDateKey(this.selectedDate, days);
+    this.renderTrainingDate();
+  },
+  renderTrainingDate: function renderTrainingDate() {
+    var date = xsParseDateKey(this.selectedDate);
+    var weekday = date.toLocaleDateString("pt-BR", { weekday: "long" });
+    var label = date.toLocaleDateString("pt-BR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
     });
+    var weekdayElement = document.getElementById("training-date-weekday");
+    var labelElement = document.getElementById("training-date-label");
     var dateInput = document.getElementById("treino-date");
-    if (dateInput && this.selectedDate) dateInput.value = this.selectedDate;
+    if (weekdayElement) weekdayElement.textContent = weekday;
+    if (labelElement) labelElement.textContent = label;
+    if (dateInput) dateInput.value = this.selectedDate;
   },
   startTrainingSession: function startTrainingSession() {
     var _thisTrainingStart = this;

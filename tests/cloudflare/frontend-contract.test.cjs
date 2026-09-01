@@ -87,6 +87,10 @@ test("training start orders mode, prescribed context, date navigator and CTA", (
   assert.match(index, /id="training-date-previous"/);
   assert.match(index, /id="training-date-open"/);
   assert.match(index, /id="training-date-next"/);
+  const renderStart = script.match(/renderTrainingStart:\s*function[\s\S]*?\n\s*},\n\s*startTrainingSession:/);
+  assert.ok(renderStart);
+  assert.match(renderStart[0], /training-prescribed-context/);
+  assert.doesNotMatch(renderStart[0], /treino-prescribed-fields/);
 });
 
 test("active training sessions save offline drafts with RER and complete through PSE", () => {
