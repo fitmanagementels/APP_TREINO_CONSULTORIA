@@ -16,6 +16,15 @@ import {
   getCatalogSyncStatus,
   syncReferenceCatalog,
 } from "./catalog.js";
+import {
+  cancelTrainingSession,
+  completeTrainingSession,
+  getActiveTrainingSession,
+  saveTrainingSessionExercises,
+  saveTrainingSessionSets,
+  startTrainingSession,
+  TrainingSessionError,
+} from "./training-sessions.js";
 
 const PUBLIC_AUTH_PATHS = new Set(["/api/auth/config", "/api/auth/google", "/api/auth/session", "/api/auth/logout"]);
 
@@ -44,10 +53,38 @@ function json(data, status = 200, headers = {}) {
   });
 }
 
+async function readJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    throw new TrainingSessionError("INVALID_PAYLOAD", "Corpo JSON inválido.");
+  }
+}
+
+function trainingSessionErrorResponse(error) {
+  const status = error.code === "SESSION_NOT_FOUND"
+    ? 404
+    : ["ACTIVE_SESSION_EXISTS", "SESSION_NOT_ACTIVE"].includes(error.code)
+      ? 409
+      : 422;
+  return json({
+    success: false,
+    code: error.code,
+    error: error.message,
+    details: error.details,
+  }, status);
+}
+
 export function createWorker(options = {}) {
   const credentialVerifier = options.verifyGoogleCredential || verifyGoogleCredential;
   const syncCatalog = options.syncReferenceCatalog || syncReferenceCatalog;
   const catalogStatus = options.getCatalogSyncStatus || getCatalogSyncStatus;
+  const activeTrainingSession = options.getActiveTrainingSession || getActiveTrainingSession;
+  const startSession = options.startTrainingSession || startTrainingSession;
+  const saveSessionExercises = options.saveTrainingSessionExercises || saveTrainingSessionExercises;
+  const saveSessionSets = options.saveTrainingSessionSets || saveTrainingSessionSets;
+  const completeSession = options.completeTrainingSession || completeTrainingSession;
+  const cancelSession = options.cancelTrainingSession || cancelTrainingSession;
   return {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -77,6 +114,43 @@ export function createWorker(options = {}) {
     if (url.pathname.startsWith("/api/") && !PUBLIC_AUTH_PATHS.has(url.pathname)) {
       const session = await allowedSession(request, env);
       if (!session) return json({ success: false, code: "AUTH_REQUIRED", error: "Autenticação necessária." }, 401);
+    }
+    if (request.method === "GET" && url.pathname === "/api/training-sessions/active") {
+      return json({ success: true, data: await activeTrainingSession(env.DB) });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/training-sessions") {
+      return json({ success: true, data: await startSession(env.DB, await readJson(request)) });
+    }
+
+    const trainingSessionMatch = url.pathname.match(
+      /^\/api\/training-sessions\/([^/]+)\/(exercises|sets|complete|cancel)$/,
+    );
+    if (trainingSessionMatch) {
+      const sessionId = decodeURIComponent(trainingSessionMatch[1]);
+      const operation = trainingSessionMatch[2];
+      if (request.method === "PUT" && operation === "exercises") {
+        return json({
+          success: true,
+          data: await saveSessionExercises(env.DB, sessionId, await readJson(request)),
+        });
+      }
+      if (request.method === "PUT" && operation === "sets") {
+        return json({
+          success: true,
+          data: await saveSessionSets(env.DB, sessionId, await readJson(request)),
+        });
+      }
+      if (request.method === "POST" && operation === "complete") {
+        return json({
+          success: true,
+          data: await completeSession(env.DB, sessionId, await readJson(request)),
+        });
+      }
+      if (request.method === "POST" && operation === "cancel") {
+        await readJson(request);
+        return json({ success: true, data: await cancelSession(env.DB, sessionId) });
+      }
     }
     if (request.method === "GET" && url.pathname === "/api/catalog/status") {
       return json({ success: true, data: await catalogStatus(env.DB) });
@@ -176,6 +250,9 @@ export function createWorker(options = {}) {
 
       return env.ASSETS.fetch(request);
     } catch (error) {
+      if (error instanceof TrainingSessionError) {
+        return trainingSessionErrorResponse(error);
+      }
       if (error instanceof AuthError) {
         return json({ success: false, code: error.code, error: error.message }, error.code === "AUTH_FORBIDDEN" ? 403 : 401);
       }
