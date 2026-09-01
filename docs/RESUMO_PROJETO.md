@@ -1,158 +1,179 @@
 # Contexto e Status do Projeto
 
-Última atualização: 30 de agosto de 2026 (America/Fortaleza)
+Última atualização: 1º de setembro de 2026 (America/Fortaleza)
 
-Este é o documento de continuidade do projeto. Ele consolida o estado verificado no repositório, as decisões que não devem ser desfeitas e as validações que ainda dependem do ambiente Google Apps Script.
-
-## Atualização Cloudflare — catálogo de referência pronto para publicação
-
-- A migração single-tenant para **Cloudflare Worker + D1** está implementada: o Worker serve o PWA e as rotas `/api/*`; D1 guarda catálogo, prescrição e execuções.
-- Em 29 de agosto de 2026 foi criado o banco de staging e aplicada a migração `0001_initial_schema.sql`.
-- O acesso público em `workers.dev` está protegido por login Google com sessão segura; as rotas `/api/*` não respondem dados antes da autenticação.
-- Os três CSVs foram exportados automaticamente da planilha, validados e importados **somente em staging**. A auditoria confirmou 62 exercícios, 15 prescrições e 27 execuções, sem sessões faltantes ou duplicadas.
-- O catálogo oficial passou a ser a planilha pública de referência, espelhada no D1 por botão autenticado e por rotina diária. O navegador não acessa a planilha e exercícios fora dela não podem ser prescritos.
-- Falta aplicar a migração de catálogo no D1 remoto, publicar o Worker e executar a primeira sincronização. O procedimento está no [Guia 07](guias-operacionais/07-catalogo-referencia-exercicios.md). Apps Script/Sheets seguem intactos como rollback.
+Este documento é a fonte de continuidade do projeto. Ele registra o estado atual, as decisões já aprovadas e a ordem segura para continuar a migração.
 
 ## Resumo executivo
 
-- O projeto é um Web App mobile-first de prescrição, execução e acompanhamento de treinos, construído com Google Apps Script e uma planilha Google.
-- O uso diário é offline-first: séries e RPE ficam pendentes no navegador e são sincronizados com `DB_Execucao` quando há conexão.
-- O carregamento inicial usa um único pacote essencial de prescrição e histórico; carga, memória e IA não bloqueiam a tela de treino.
-- Há cinco telas ativas: **Treino**, **Prescrição**, **Prescrever**, **Histórico** e **Carga**.
-- O editor **Prescrever** usa o catálogo manual `Demanda_Muscular`, calcula demanda muscular por ciclo e substitui somente a combinação de ficha e treino salva.
-- O repositório contém testes locais de regressão e de apresentação. A publicação e o teste contra a planilha real no Apps Script continuam pendentes de validação externa.
+- O PWA está em transição de Google Apps Script/Sheets para **Cloudflare Worker + D1**, usando a camada gratuita e a URL `workers.dev`.
+- A arquitetura atual é **single tenant** e o acesso é protegido por login Google e cookie de sessão seguro.
+- Cloudflare já serve frontend e API; D1 guarda catálogo, prescrições, execuções e, com a migração `0003`, o ciclo de vida das sessões de treino.
+- A planilha pública permanece apenas como fonte editorial do catálogo de exercícios. O navegador não a consulta durante o uso diário.
+- As abas **Histórico** e **Carga** não foram redesenhadas. Sessões finalizadas são convertidas para o formato de execução que essas telas já consomem.
+- A aba **Treino** agora possui início explícito, uma única sessão ativa, treino prescrito/livre, rascunho offline, RER em intervalos de `0,5`, revisão, PSE e finalização.
+- A próxima evolução de produto será prescrição com quantidade dinâmica de ciclos e cronograma de periodização; ela não faz parte deste incremento.
 
-## Objetivo do projeto
+## Decisões aprovadas
 
-- **Objetivo principal:** permitir prescrever fichas, executar séries e consultar histórico/carga em um Web App conectado a uma planilha Google.
-- **Resultado esperado:** uma experiência móvel resiliente, com abertura rápida, registros locais recuperáveis e sincronização segura com a base.
-- **Uso previsto:** operação de fichas e treinos no contexto XSTeam. O público detalhado e as regras de acesso além do modo atual do Web App são **a confirmar**.
-- **Critérios técnicos de sucesso:** boot sem dependência de IA ou cache de carga, escrita sem apagar dados existentes, compatibilidade com `HtmlService` e testes locais aprovados.
+| Decisão | Regra atual |
+|---|---|
+| Hospedagem | Cloudflare no plano gratuito, sem compra de domínio. |
+| URL | Subdomínio atual em `workers.dev`. |
+| Arquitetura | Single tenant nesta fase. |
+| Autenticação | Login Google; apenas o e-mail configurado no secret do Worker pode entrar. |
+| Banco operacional | D1, sem Google Sheets como banco do PWA. |
+| Catálogo | A planilha pública é a fonte de referência; o Worker espelha dados válidos no D1. |
+| Exercícios | Prescrição e treino livre aceitam somente exercícios ativos do catálogo. |
+| Terminologia | **RER** = repetições em reserva; **PSE** = percepção subjetiva de esforço da sessão. |
+| Interface | Manter o design atual até uma etapa específica de redesign. |
+| Histórico/Carga | Preservar comportamento e contratos existentes. |
 
-## Estado atual
+## Arquitetura atual
 
-- **Etapa:** base funcional documentada e pronta para validação integrada no Google Apps Script.
-- **Código principal:** `app/Código.gs` centraliza o backend; `app/index.html`, `app/script.html` e `app/style.html` compõem o frontend.
-- **Versão relevante:** o commit `1566aa7` consolidou o editor de prescrição e o acabamento do frontend antes desta atualização documental.
-- **Dados essenciais de boot:** `getInitialAppData()` retorna `prescricao`, `historico`, `status`, `errors` e `error`; o HTML recebe o payload em `window.__XS_BOOTSTRAP__`.
-- **Pendência imediata:** publicar o código no Apps Script e executar um teste completo com a planilha real. Essa publicação não pode ser confirmada apenas pelo repositório Git.
+```text
+Navegador/PWA
+    │ HTTPS + cookie de sessão
+    ▼
+Cloudflare Worker
+    ├── arquivos estáticos do PWA
+    ├── autenticação Google
+    ├── rotas /api/*
+    └── sincronização do catálogo público
+             │
+             ▼
+        Cloudflare D1
+        ├── catálogo
+        ├── prescrições
+        ├── sessões e rascunhos
+        └── execuções finalizadas
+```
 
-## Como o app funciona
+Google Apps Script e a antiga planilha operacional devem permanecer intactos apenas como rollback enquanto a migração Cloudflare não conclui todo o aceite. Não devem receber novas funcionalidades.
 
-1. `doGet()` renderiza `index.html`; o template injeta o payload inicial e inclui estilo e script.
-2. `App.init()` recupera pendências locais, atualiza o indicador de sincronização e inicia a navegação.
-3. `fetchInitialData()` consome o boot com prescrição e histórico; o loader é liberado quando esses dados essenciais terminam.
-4. Se o servidor falhar ou retornar resposta inválida, o app usa cache local quando disponível e mostra diagnóstico em vez de uma tela vazia silenciosa.
-5. `clientGetGestaoCarga()` roda em segundo plano e não escreve `DB_GestaoCarga` durante o boot.
+## Fluxo da aba Treino
 
-## Telas e fluxos ativos
+1. Sem sessão ativa, o usuário escolhe **Treino prescrito** ou **Treino livre**.
+2. O treino prescrito exige data, ficha, treino e ciclo; o livre exige apenas a data.
+3. **Iniciar treino** cria uma sessão oficial no D1. Uma restrição impede duas sessões ativas.
+4. Durante a sessão, somente ela aparece na aba Treino. Não é possível trocar silenciosamente para outra ficha.
+5. Exercícios e séries são rascunhos. Alterações são salvas primeiro no navegador e sincronizadas em segundo plano.
+6. Cada série usa carga, repetições e RER. RER aceita `0`, `0,5`, `1` ... `10`.
+7. Séries parciais impedem finalizar; linhas vazias são ignoradas.
+8. A revisão solicita PSE da sessão. A finalização publica as séries completas em uma transação e encerra a sessão.
+9. Cancelar encerra a sessão sem criar execuções no histórico.
 
-| Tela | Responsabilidade | Estado observado |
-|---|---|---|
-| **Treino** | Executar a sessão por ficha, treino, data e ciclo. | Permite ajustes locais por dia, séries extras/omitidas e sincronização de pendências. |
-| **Prescrição** | Consultar a ficha por treino e semana. | Exibe séries, repetições, descanso e observações. |
-| **Prescrever** | Criar ou editar uma combinação de ficha e treino. | Usa `Demanda_Muscular`, permite ordenar/trocar exercícios e salva ciclos nas colunas `semana_*`. |
-| **Histórico** | Consultar execuções já registradas. | Agrupa sessões e abre detalhes por exercício e série. |
-| **Carga** | Mostrar indicadores e gráficos de desempenho. | A apresentação atual usa o histórico no frontend; o backend também produz resumos de sessão sob demanda. |
+O procedimento detalhado está no [Guia 08](guias-operacionais/08-sessao-treino-e-treino-livre.md).
 
-## Dados e integração com a planilha
+## Telas
 
-### Abas gerenciadas
+| Tela | Responsabilidade atual |
+|---|---|
+| **Treino** | Iniciar, executar, recuperar, finalizar ou cancelar uma sessão prescrita/livre. |
+| **Prescrição** | Visualizar fichas, treinos e ciclos, sem edição. |
+| **Prescrever** | Editar prescrições e escolher exercícios do catálogo oficial. |
+| **Histórico** | Consultar execuções finalizadas. Não foi alterada neste incremento. |
+| **Carga** | Consultar indicadores existentes a partir das execuções. Não foi alterada neste incremento. |
 
-| Aba | Finalidade | Situação no código |
-|---|---|---|
-| `DB_Prescricao` | Exercícios por ficha, treino e ciclos semanais. | Leitura normaliza texto; o editor substitui somente o treino selecionado. |
-| `DB_Execucao` | Registros granulares de séries executadas. | Recebe upsert por `id_sessao`. |
-| `DB_GestaoCarga` | Cache/resumo por sessão, ficha e treino. | Pode ser atualizado por demanda; não é atualizado no boot. |
-| `DB_MemoriaBase` | Snapshots consolidados para análises futuras. | Schema e setup disponíveis; fluxo de geração ainda não foi implementado. |
-| `DB_MemoriaExercicio` | Métricas por exercício dentro de um snapshot. | Schema e setup disponíveis. |
-| `DB_Insights` | Contextos e respostas de IA sob demanda. | Schema e setup disponíveis; não há chamada real de IA. |
+## Banco D1
 
-### Regras importantes
+As migrações são aplicadas em ordem:
 
-- `DB_Prescricao` usa `id_ficha`, `id_treino`, `id_exercicio`, `observacoes`, `ordem_exercicio` e campos de séries, repetições e descanso para as semanas 1 a 4.
-- `DB_GestaoCarga` usa um schema de resumo rico: identificadores de sessão/grupo, ficha, treino, totais, RPE médio, melhor e1RM, maior carga, origem e atualização. Não usar o schema histórico reduzido de cinco campos.
-- `Demanda_Muscular` é uma aba manual de catálogo; `setupDatabase()` não deve criá-la, limpá-la ou alterá-la.
-- `setupDatabase()` é não destrutivo: cria apenas abas gerenciadas ausentes, acrescenta cabeçalhos faltantes e preserva dados/abas manuais.
-- O identificador de sessão inclui ficha e treino para reduzir colisões entre sessões distintas.
+| Migração | Conteúdo |
+|---|---|
+| `0001_initial_schema.sql` | Catálogo, prescrições e execuções. |
+| `0002_reference_catalog.sql` | Espelho e controle da sincronização da referência pública. |
+| `0003_training_sessions.sql` | Sessões, exercícios da sessão, séries em rascunho e vínculo com execuções. |
 
-## Histórico relevante
+A migração `0003` adiciona:
 
-| Referência | Mudança | Impacto |
-|---|---|---|
-| `45301dc` | Upload inicial do projeto. | Estabeleceu a base do Web App e da documentação. |
-| `c825200` | Direção de acabamento visual documentada. | Definiu a evolução visual do frontend sem alterar regras de negócio. |
-| `3b43bfe` | Iluminação de fundo por aba documentada. | Diferenciou visualmente os contextos de uso. |
-| `1566aa7` | Editor Prescrever, ajustes de backend, testes e polish do frontend. | Adicionou o fluxo de prescrição e consolidou compatibilidade/regressões. |
+- `training_sessions`;
+- `training_session_exercises`;
+- `training_session_sets`;
+- `execution_records.training_session_id`;
+- índice único parcial que permite somente uma sessão com status `active`.
 
-## Decisões tomadas e justificativas
+## Regras de integridade
 
-| Decisão | Por que foi tomada | Onde impacta | Como verificar/retomar |
-|---|---|---|---|
-| Boot com dados essenciais apenas. | A carga e a IA não podem atrasar a abertura do treino. | `getInitialAppData()`, `fetchInitialData()`. | Confirmar que prescrição/histórico bastam para remover o loader. |
-| Sintaxe conservadora no frontend. | `HtmlService` pode falhar com recursos modernos durante a injeção de HTML. | `app/script.html`. | Rodar `node tests/app-regression.test.js`. |
-| Sincronização offline-first. | O registro da sessão não deve se perder por indisponibilidade temporária. | `localStorage`, `xs_pending`, `DB_Execucao`. | Registrar série, interromper rede e sincronizar depois. |
-| Setup não destrutivo. | A planilha pode conter dados operacionais e abas manuais. | `setupDatabase()`. | Executar uma vez em cópia segura e conferir abas/cabeçalhos. |
-| IA apenas sob demanda e sem custo automático. | O fluxo diário deve permanecer previsível, rápido e sem consumo automático. | Abas de memória e futuros relatórios. | Não implementar chamadas automáticas no boot ou na sincronização. |
-| Catálogo muscular manual. | A prescrição precisa respeitar exercícios e demandas controlados na planilha. | `Demanda_Muscular`, tela Prescrever. | Criar/editar treino e validar exercício contra o catálogo. |
+- A finalização é idempotente: repetir a requisição não duplica séries.
+- O D1 publica séries e encerra a sessão por lote transacional.
+- Identificadores gerados no navegador são temporários e são trocados pelos IDs do servidor antes de salvar séries.
+- O rascunho local só é apagado depois que o Worker confirma a conclusão ou o cancelamento.
+- Em uma recuperação da mesma sessão, os valores locais vencem os valores antigos do servidor.
+- Se o servidor indicar outra sessão ou nenhuma sessão, o rascunho divergente é guardado separadamente para recuperação técnica.
+- Nomes fora do catálogo ativo são recusados pelo backend, mesmo que alguém tente chamar a API diretamente.
 
-## Informações importantes vindas do chat
+## Catálogo de referência
 
-- O usuário solicitou que este arquivo e `docs/index.html` funcionem como documentação de **status e continuidade**.
-- A cópia publicada no GitHub deve acompanhar a reorganização documental.
-- A documentação não substitui o deploy no Google Apps Script: GitHub e Apps Script são etapas separadas.
+A fonte autorizada é:
 
-## Etapa atual em desenvolvimento
+<https://docs.google.com/spreadsheets/d/1ukUCtws2hV2_PW7JzduQV4cr_EcqVC6-EoHzut1KS0Y/edit?gid=139666673#gid=139666673>
 
-- **Pronto no repositório:** backend, telas, editor de prescrição, schemas de memória, testes de regressão e documentação reorganizada.
-- **Em validação externa:** publicação do projeto Apps Script e integração com a planilha real.
-- **Ainda não implementado:** interface de relatórios com IA, geração de snapshots de memória, chamada real a um modelo e política de reaproveitamento de insights.
-- **Cuidado ao continuar:** não reintroduzir escrita em `DB_GestaoCarga` no boot, não usar APIs modernas incompatíveis no `script.html` e não transformar `setupDatabase()` em operação destrutiva.
+O botão **Atualizar catálogo**, na aba Prescrever, solicita que o Worker leia a planilha pública, valide os dados e atualize o D1. O uso normal do PWA lê apenas D1, evitando peso, latência e dependência constante do Google Sheets. Consulte o [Guia 07](guias-operacionais/07-catalogo-referencia-exercicios.md).
 
-## Próximos passos
+## Validação já executada no repositório
 
-1. Publicar os arquivos atuais no projeto Google Apps Script e criar/atualizar a implantação do Web App.
-2. Abrir a URL publicada e validar o boot com a planilha real, inclusive o diagnóstico para prescrição vazia ou resposta inválida.
-3. Registrar séries, alterar RPE após uma sincronização e confirmar o upsert em `DB_Execucao`.
-4. Executar `setupDatabase()` em ambiente controlado e conferir que apenas abas gerenciadas/cabeçalhos foram tratados.
-5. Decidir o escopo do próximo incremento: relatórios determinísticos de carga ou a camada de IA sob demanda.
+- Testes de schema e domínio das sessões.
+- Testes das seis rotas autenticadas de sessão.
+- Contratos do frontend Cloudflare.
+- Regressões do PWA e proteção das telas existentes.
+- Geração dos arquivos estáticos usados pelo Worker.
+- Verificação real no navegador em viewport móvel do estado ativo, séries completas/parciais, RER decimal e modal de finalização.
+- Suíte Worker: 13 arquivos e 69 testes aprovados antes da publicação.
 
-## Arquivos e pastas importantes
+## Próxima ação
 
-| Caminho | Função | Observação |
-|---|---|---|
-| `app/Código.gs` | Backend Apps Script, schemas e rotas. | Ponto de entrada para planilha, setup, boot e sincronização. |
-| `app/index.html` | Estrutura do Web App e fallback de loader. | Injeta o payload inicial do backend. |
-| `app/script.html` | Lógica do frontend. | Usar sintaxe conservadora compatível com `HtmlService`. |
-| `app/style.html` | Estilos do Web App. | Inclui acabamento visual e variação de luz por aba. |
-| `docs/RESUMO_PROJETO.md` | Fonte de verdade de status e continuidade. | Atualizar primeiro quando o estado mudar. |
-| `docs/index.html` | Leitura visual do resumo. | Deve espelhar este documento, sem narrativa divergente. |
-| `docs/ARQUITETURA_IA_HIBRIDA.md` | Detalhe da arquitetura de memória/IA. | Complementa, não substitui, este resumo. |
-| `tests/app-regression.test.js` | Proteções de regressão e compatibilidade. | Executar após mudanças em app ou docs. |
-| `tests/frontend-polish.test.js` | Proteções do acabamento visual. | Executar após mudanças de estilo. |
-| `scripts/git-workspace.sh` | Wrapper Git do workspace. | Usar para status, commit, push e fetch. |
+1. Aplicar as migrações pendentes no D1 remoto.
+2. Gerar os assets e publicar o Worker.
+3. Confirmar `/api/status` e a proteção das rotas sem autenticação.
+4. Com a conta Google autorizada, executar o aceite do [Guia 08](guias-operacionais/08-sessao-treino-e-treino-livre.md).
+5. Somente depois iniciar a etapa de ciclos dinâmicos e cronograma de periodização.
 
-## Riscos, bloqueios e pendências
+## Evoluções posteriores
 
-- **Risco externo:** a integração com a planilha e o deploy do Apps Script não podem ser validados apenas localmente.
-- **Risco de compatibilidade:** recursos modernos no `script.html` podem quebrar a renderização do Web App publicado.
-- **Risco de dados:** alterações destrutivas no setup ou em abas manuais podem afetar informações operacionais.
-- **Pendência de produto:** o objetivo e a audiência detalhada dos relatórios de IA ainda precisam de uma definição antes de implementar a tela final.
-- **Lacuna a confirmar:** regras de autenticação e acesso além da configuração atual do manifesto do Apps Script.
+- Quantidade dinâmica de ciclos na prescrição.
+- Área de periodização que permita ordenar e repetir ciclos livremente.
+- Visualização da flutuação esperada da carga de treino.
+- Métrica primária: somatório de `10 − RER` por série.
+- Métrica complementar: `repetições × (10 − RER)` por série, somada no treino/ciclo.
+- Depois da base funcional, avaliar múltiplos perfis/atletas sem antecipar complexidade multi-tenant.
 
-## Como retomar o trabalho em outra sessão
+## Arquivos principais
 
-1. Leia este arquivo e, se o assunto for IA/memória, leia também `docs/ARQUITETURA_IA_HIBRIDA.md`.
-2. Verifique o estado do repositório: `bash scripts/git-workspace.sh status --short --branch`.
-3. Veja os commits recentes: `bash scripts/git-workspace.sh log --oneline --decorate -8`.
-4. Execute `node tests/app-regression.test.js` e `node tests/frontend-polish.test.js` antes de modificar o app.
-5. Para continuar o fluxo funcional, comece pela publicação no Apps Script e pelos testes com a planilha real; para evoluir produto, defina primeiro o escopo dos relatórios.
+| Caminho | Função |
+|---|---|
+| `worker/src/index.js` | Rotas, autenticação e entrada do Worker. |
+| `worker/src/training-sessions.js` | Regras de domínio das sessões e publicação das execuções. |
+| `worker/migrations/0003_training_sessions.sql` | Estrutura D1 do novo fluxo. |
+| `app/index.html` | Estrutura visual do PWA. |
+| `app/script.html` | Estado, rascunho offline, sincronização e interação. |
+| `app/style.html` | Estilos existentes e pequenos estados visuais do fluxo. |
+| `tests/cloudflare/` | Testes do Worker, D1, rotas e contratos estáticos. |
+| `tests/app-regression.test.js` | Regressões do frontend e compatibilidade. |
+| `docs/guias-operacionais/08-sessao-treino-e-treino-livre.md` | Operação e aceite do novo fluxo. |
+
+## Cuidados ao continuar
+
+- Não alterar Histórico ou Carga sem solicitação explícita.
+- Não voltar a usar Apps Script/Sheets como backend operacional.
+- Não expor `ALLOWED_GOOGLE_EMAIL` ou `SESSION_SECRET` em arquivos versionados.
+- Não versionar `wrangler.jsonc`; somente `wrangler.jsonc.example` é público.
+- Não editar dados do D1 manualmente para contornar falhas de sessão.
+- Não criar exercícios fora da planilha de referência.
+- Não confundir RER com RIR na interface em português.
+- Não implementar periodização antes de concluir o aceite da sessão básica.
+
+## Como retomar em outra sessão
+
+1. Leia este arquivo e os Guias 07 e 08.
+2. Verifique o repositório com `bash scripts/git-workspace.sh status --short --branch`.
+3. Execute `node tests/app-regression.test.js` e a suíte Vitest antes de modificar o fluxo.
+4. Consulte `worker/src/training-sessions.js` antes de alterar regras de sessão.
+5. Confirme no painel Cloudflare quais migrações e qual versão estão publicadas antes de qualquer nova implantação.
 
 ## Contexto para outro chat ou IA
 
-- **Objetivo essencial:** manter um Web App de treinos rápido, offline-first e seguro para prescrição, execução e acompanhamento com Google Apps Script/Planilhas.
-- **Estado atual:** o repositório contém o app, o editor Prescrever e os schemas de carga/memória; ainda falta validar deploy e planilha reais.
-- **Arquivos a ler primeiro:** `docs/RESUMO_PROJETO.md`, `app/Código.gs`, `app/script.html`, `tests/app-regression.test.js`.
-- **Decisões que não devem ser desfeitas:** boot essencial sem IA/carga, setup não destrutivo, sintaxe conservadora no frontend, IA apenas sob demanda e catálogo muscular manual.
-- **Próxima ação recomendada:** publicar no Apps Script e testar o ciclo completo de boot, registro local, sincronização e RPE.
-- **Antes de agir:** confirmar o estado da implantação, as permissões da planilha e se o próximo objetivo é confiabilidade operacional ou relatórios inteligentes.
+- **Objetivo essencial:** migrar todas as funções básicas do PWA para Cloudflare sem custo, em single tenant.
+- **Estado funcional:** autenticação Google, D1, catálogo, prescrição, execução e análises existentes; ciclo de vida explícito da sessão implementado no código.
+- **Não desfazer:** design atual, Histórico/Carga, catálogo exclusivo, RER em português, rascunho offline e sessão única.
+- **Próxima ação de produto:** validar o fluxo publicado; depois implementar ciclos dinâmicos e cronograma de periodização.

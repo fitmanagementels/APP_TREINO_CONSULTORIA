@@ -310,30 +310,30 @@
       <p class="eyebrow">App Treino Consultoria · documentação viva</p>
       <h1>Contexto e Status do Projeto</h1>
       <p class="lede">
-        Referência para retomar o desenvolvimento, entender decisões técnicas e separar o que está verificado no repositório do que ainda depende do ambiente Google Apps Script.
+        Referência para retomar a migração single tenant do PWA para Cloudflare, entender as decisões aprovadas e separar o que já está validado do aceite ainda necessário no ambiente publicado.
       </p>
-      <p class="meta">Última atualização: 18 de julho de 2026 · Fonte de verdade: <code>docs/RESUMO_PROJETO.md</code></p>
+      <p class="meta">Última atualização: 1º de setembro de 2026 · Fonte de verdade: <code>docs/RESUMO_PROJETO.md</code></p>
 
       <section class="quick-grid" aria-label="Resumo rápido">
-        <div class="card"><strong>Objetivo</strong><span>Prescrever, executar e acompanhar treinos com Apps Script e Planilhas Google.</span></div>
-        <div class="card"><strong>Etapa atual</strong><span>Base funcional documentada; pronta para validação integrada.</span></div>
-        <div class="card"><strong>Onde parei</strong><span>Editor Prescrever, boot resiliente, schemas e testes já estão no repositório.</span></div>
-        <div class="card"><strong>Próxima ação</strong><span>Publicar no Apps Script e validar o fluxo completo com a planilha real.</span></div>
+        <div class="card"><strong>Objetivo</strong><span>Prescrever, executar e acompanhar treinos no Cloudflare gratuito, sem Apps Script como backend.</span></div>
+        <div class="card"><strong>Etapa atual</strong><span>Sessão única prescrita/livre implementada, com D1, rascunho offline e login Google.</span></div>
+        <div class="card"><strong>Onde parei</strong><span>RER em 0,5, revisão, PSE, finalização e cancelamento estão validados localmente.</span></div>
+        <div class="card"><strong>Próxima ação</strong><span>Aplicar a migração D1, publicar o Worker e executar o aceite autenticado.</span></div>
       </section>
 
       <aside class="callout">
-        <strong>Atenção:</strong> estar atualizado no GitHub não confirma a publicação no Google Apps Script. O deploy e a integração com a planilha precisam de validação externa.
+        <strong>Atenção:</strong> a planilha pública é somente a fonte editorial do catálogo. O uso diário do PWA lê e grava no D1; não volte a usar Apps Script/Sheets como backend operacional.
       </aside>
 
       <details class="doc-section">
         <summary>Resumo executivo</summary>
         <div class="section-body">
           <ul>
-            <li>Web App mobile-first de prescrição, execução e acompanhamento de treinos.</li>
-            <li>Fluxo offline-first: séries e RPE ficam pendentes no navegador e sincronizam com <code>DB_Execucao</code>.</li>
-            <li>O boot usa prescrição e histórico; carga, memória e IA não bloqueiam a tela de treino.</li>
+            <li>PWA mobile-first single tenant servido por Cloudflare Worker, com banco D1 e login Google.</li>
+            <li>Fluxo offline-first: exercícios e séries da sessão ficam no navegador e sincronizam com o D1.</li>
+            <li>Uma única sessão fica ativa; pode ser prescrita ou livre e bloqueia trocas acidentais de ficha.</li>
             <li>As telas ativas são Treino, Prescrição, Prescrever, Histórico e Carga.</li>
-            <li>O editor usa o catálogo manual <code>Demanda_Muscular</code> e salva somente a combinação de ficha e treino escolhida.</li>
+            <li>Histórico e Carga foram preservados; sessões finalizadas publicam o formato de execução já utilizado.</li>
           </ul>
         </div>
       </details>
@@ -341,9 +341,9 @@
       <details class="doc-section">
         <summary>Objetivo e critérios de sucesso</summary>
         <div class="section-body">
-          <p><strong>Objetivo:</strong> manter uma operação de fichas e treinos rápida, móvel e resiliente sobre Google Apps Script e uma planilha Google.</p>
-          <p><strong>Critérios técnicos:</strong> abertura sem depender de IA/carga, sincronização recuperável, setup não destrutivo, compatibilidade com <code>HtmlService</code> e testes locais aprovados.</p>
-          <p><strong>Público detalhado:</strong> a confirmar; o uso observado é o contexto operacional XSTeam.</p>
+          <p><strong>Objetivo:</strong> manter uma operação de fichas e treinos rápida, móvel e resiliente no Cloudflare gratuito.</p>
+          <p><strong>Critérios técnicos:</strong> D1 como banco operacional, sessão única, rascunho recuperável, finalização atômica, catálogo exclusivo e zero custo obrigatório.</p>
+          <p><strong>Escopo atual:</strong> single tenant; múltiplos atletas e perfis serão avaliados somente depois da base funcional.</p>
         </div>
       </details>
 
@@ -351,11 +351,11 @@
         <summary>Status atual</summary>
         <div class="section-body">
           <div class="status-list">
-            <div class="status-item"><strong>Verificado</strong>Backend, frontend, editor Prescrever, schemas e testes existem no repositório.</div>
-            <div class="status-item"><strong>Boot</strong><code>getInitialAppData()</code> entrega prescrição, histórico, status e erros em um único payload.</div>
-            <div class="status-item pending"><strong>Pendente</strong>Publicar a versão no Apps Script e validar com a planilha real.</div>
+            <div class="status-item"><strong>Verificado</strong>Worker, D1, login, catálogo e ciclo de vida da sessão possuem testes no repositório.</div>
+            <div class="status-item"><strong>Treino</strong>Início prescrito/livre, rascunho offline, RER, revisão, finalização e cancelamento.</div>
+            <div class="status-item pending"><strong>Pendente</strong>Aplicar a migração remota, publicar e executar o aceite com a conta Google autorizada.</div>
           </div>
-          <p>O commit <code>1566aa7</code> consolidou o editor de prescrição e o acabamento do frontend antes desta atualização documental.</p>
+          <p>O procedimento de operação e aceite está em <code>docs/guias-operacionais/08-sessao-treino-e-treino-livre.md</code>.</p>
         </div>
       </details>
 
@@ -380,25 +380,25 @@
           <table>
             <thead><tr><th>Decisão</th><th>Por quê</th><th>Como retomar</th></tr></thead>
             <tbody>
-              <tr><td>Boot com dados essenciais.</td><td>Carga e IA não podem atrasar a abertura.</td><td>Validar que prescrição e histórico liberam o loader.</td></tr>
-              <tr><td>Sintaxe conservadora no frontend.</td><td><code>HtmlService</code> pode falhar com recursos modernos.</td><td>Rodar o teste de regressão após editar <code>app/script.html</code>.</td></tr>
-              <tr><td>Setup não destrutivo.</td><td>A planilha pode ter dados e abas manuais.</td><td>Não usar limpeza/recriação de abas no <code>setupDatabase()</code>.</td></tr>
-              <tr><td>IA sob demanda e sem custo automático.</td><td>O fluxo diário deve permanecer rápido e previsível.</td><td>Não chamar modelos no boot ou na sincronização.</td></tr>
-              <tr><td>Catálogo muscular manual.</td><td>A prescrição precisa respeitar exercícios controlados.</td><td>Validar novos exercícios contra <code>Demanda_Muscular</code>.</td></tr>
+              <tr><td>Cloudflare + D1 no plano gratuito.</td><td>Retirar Apps Script e Sheets do fluxo operacional sem gerar custo.</td><td>Usar a URL <code>workers.dev</code> e acompanhar limites gratuitos.</td></tr>
+              <tr><td>Single tenant com login Google.</td><td>Entregar a base com segurança e pouca complexidade.</td><td>Manter os secrets fora do Git e só aceitar o e-mail autorizado.</td></tr>
+              <tr><td>Sessão única e explícita.</td><td>Evitar abrir outra ficha durante um treino em andamento.</td><td>Finalizar ou cancelar antes de iniciar outra sessão.</td></tr>
+              <tr><td>Rascunho offline.</td><td>Não perder séries por oscilação de conexão.</td><td>Apagar o cache local somente após confirmação do Worker.</td></tr>
+              <tr><td>Catálogo exclusivo.</td><td>Exercícios precisam vir da referência controlada.</td><td>Sincronizar a planilha pública para o D1 pelo Worker.</td></tr>
             </tbody>
           </table>
         </div>
       </details>
 
       <details class="doc-section">
-        <summary>Dados e integração com a planilha</summary>
+        <summary>Dados, D1 e catálogo de referência</summary>
         <div class="section-body">
           <ul>
-            <li><code>DB_Prescricao</code> guarda exercícios por ficha, treino e ciclos semanais; o backend normaliza os campos textuais.</li>
-            <li><code>DB_Execucao</code> recebe registros de séries por <code>id_sessao</code>; esse identificador inclui ficha e treino para reduzir colisões.</li>
-            <li><code>DB_GestaoCarga</code> é um resumo rico por sessão, ficha e treino. Pode ser atualizado por demanda, nunca como dependência do boot.</li>
-            <li><code>DB_MemoriaBase</code>, <code>DB_MemoriaExercicio</code> e <code>DB_Insights</code> já possuem schema, mas a geração de snapshots e IA ainda não existe.</li>
-            <li><code>Demanda_Muscular</code> é uma aba manual de catálogo: <code>setupDatabase()</code> não deve criá-la, limpá-la ou alterá-la.</li>
+            <li><code>0001_initial_schema.sql</code> cria catálogo, prescrições e execuções no D1.</li>
+            <li><code>0002_reference_catalog.sql</code> controla o espelho da planilha pública.</li>
+            <li><code>0003_training_sessions.sql</code> cria sessões, exercícios, séries em rascunho e o vínculo com execuções.</li>
+            <li>A planilha pública serve apenas para editar o catálogo; o navegador lê o espelho validado no D1.</li>
+            <li>A finalização da sessão publica somente séries completas e preserva o contrato consumido por Histórico e Carga.</li>
           </ul>
         </div>
       </details>
@@ -407,9 +407,10 @@
         <summary>Informações importantes do chat</summary>
         <div class="section-body">
           <ul>
-            <li>Este Markdown e esta página HTML foram definidos como os artefatos de status e continuidade do projeto.</li>
-            <li>A reorganização documental deve acompanhar a cópia publicada no GitHub.</li>
-            <li>GitHub versiona o código; ele não substitui o deploy nem valida permissões no Google Apps Script.</li>
+            <li>O projeto deve permanecer sem custo; não comprar domínio nem ativar serviços pagos.</li>
+            <li>O design atual do PWA deve ser mantido nesta etapa.</li>
+            <li>Prescrição é visualização; Prescrever é edição.</li>
+            <li>A próxima etapa, depois do aceite, é ciclos dinâmicos e cronograma de periodização.</li>
           </ul>
         </div>
       </details>
@@ -420,9 +421,11 @@
           <table>
             <thead><tr><th>Caminho</th><th>Responsabilidade</th></tr></thead>
             <tbody>
-              <tr><td><code>app/Código.gs</code></td><td>Backend, schemas, rotas, setup, boot e sincronização.</td></tr>
-              <tr><td><code>app/index.html</code></td><td>Estrutura do Web App e fallback do loader.</td></tr>
-              <tr><td><code>app/script.html</code></td><td>Lógica do frontend; exige sintaxe compatível com Apps Script.</td></tr>
+              <tr><td><code>worker/src/index.js</code></td><td>Rotas e entrada do Worker.</td></tr>
+              <tr><td><code>worker/src/training-sessions.js</code></td><td>Regras de início, rascunho, conclusão e cancelamento.</td></tr>
+              <tr><td><code>worker/migrations/0003_training_sessions.sql</code></td><td>Estrutura D1 das sessões.</td></tr>
+              <tr><td><code>app/index.html</code></td><td>Estrutura do PWA e estados de sessão.</td></tr>
+              <tr><td><code>app/script.html</code></td><td>Lógica do frontend e sincronização offline.</td></tr>
               <tr><td><code>app/style.html</code></td><td>Estilos e diferenciação visual entre abas.</td></tr>
               <tr><td><code>docs/RESUMO_PROJETO.md</code></td><td>Fonte de verdade do status e continuidade.</td></tr>
               <tr><td><code>docs/ARQUITETURA_IA_HIBRIDA.md</code></td><td>Detalhe da arquitetura futura de memória e IA.</td></tr>
@@ -436,11 +439,11 @@
         <summary>Próximos passos</summary>
         <div class="section-body">
           <ol>
-            <li>Publicar os arquivos atuais no projeto Google Apps Script e atualizar a implantação do Web App.</li>
-            <li>Abrir a URL publicada e testar boot, diagnóstico de prescrição vazia e fallback de resposta inválida.</li>
-            <li>Registrar séries, alterar RPE após sincronização e conferir o upsert em <code>DB_Execucao</code>.</li>
-            <li>Executar <code>setupDatabase()</code> em ambiente controlado e conferir abas/cabeçalhos.</li>
-            <li>Definir se o próximo incremento será relatório determinístico de carga ou IA sob demanda.</li>
+            <li>Aplicar as migrações pendentes no D1 remoto.</li>
+            <li>Gerar os assets e publicar o Worker.</li>
+            <li>Confirmar o status do banco e que as rotas continuam protegidas sem login.</li>
+            <li>Executar o aceite do Guia 08 com uma sessão prescrita e uma sessão livre.</li>
+            <li>Depois do aceite, implementar ciclos dinâmicos e cronograma de periodização.</li>
           </ol>
         </div>
       </details>
@@ -449,11 +452,11 @@
         <summary>Riscos, bloqueios e pendências</summary>
         <div class="section-body">
           <ul>
-            <li><strong>Integração externa:</strong> deploy e permissões da planilha não são verificáveis apenas no repositório.</li>
-            <li><strong>Compatibilidade:</strong> APIs modernas em <code>app/script.html</code> podem quebrar o Web App publicado.</li>
-            <li><strong>Dados:</strong> mudanças destrutivas em setup ou abas manuais podem afetar a operação.</li>
-            <li><strong>Produto:</strong> objetivo/audiência detalhados para relatórios de IA ainda precisam de definição.</li>
-            <li><strong>Acesso:</strong> regras de autenticação além do manifesto atual são a confirmar.</li>
+            <li><strong>Deploy:</strong> código versionado não confirma migração nem Worker publicados.</li>
+            <li><strong>Rascunho:</strong> limpar dados do navegador durante uma sessão offline pode perder alterações locais.</li>
+            <li><strong>Dados:</strong> não editar o D1 manualmente para contornar falhas de sessão.</li>
+            <li><strong>Acesso:</strong> secrets e e-mail autorizado nunca devem entrar no Git.</li>
+            <li><strong>Escopo:</strong> não antecipar multi-tenant nem periodização antes do aceite básico.</li>
           </ul>
         </div>
       </details>
@@ -462,10 +465,10 @@
         <summary>Como retomar o trabalho</summary>
         <div class="section-body">
           <ol>
-            <li>Leia <code>docs/RESUMO_PROJETO.md</code> e, para IA/memória, <code>docs/ARQUITETURA_IA_HIBRIDA.md</code>.</li>
+            <li>Leia <code>docs/RESUMO_PROJETO.md</code> e os Guias 07 e 08.</li>
             <li>Execute <code>bash scripts/git-workspace.sh status --short --branch</code>.</li>
-            <li>Execute <code>node tests/app-regression.test.js</code> e <code>node tests/frontend-polish.test.js</code>.</li>
-            <li>Comece pelo deploy/teste integrado ou defina o escopo de relatórios antes de implementar IA.</li>
+            <li>Execute os testes de regressão e a suíte Vitest antes de alterar o fluxo.</li>
+            <li>Confirme no Cloudflare quais migrações e qual versão estão publicadas.</li>
           </ol>
         </div>
       </details>
@@ -474,11 +477,11 @@
         <summary>Contexto para outro chat ou IA</summary>
         <div class="section-body">
           <ul>
-            <li><strong>Objetivo essencial:</strong> Web App de treinos rápido, offline-first e seguro sobre Apps Script/Planilhas.</li>
-            <li><strong>Estado atual:</strong> editor Prescrever, schemas e testes estão no repositório; falta validar deploy e planilha reais.</li>
-            <li><strong>Não desfazer:</strong> boot essencial sem IA/carga, setup não destrutivo, sintaxe conservadora e catálogo muscular manual.</li>
-            <li><strong>Próxima ação:</strong> publicar no Apps Script e testar boot, registro local, sincronização e RPE.</li>
-            <li><strong>Antes de agir:</strong> confirmar implantação, permissões da planilha e prioridade entre confiabilidade operacional e relatórios inteligentes.</li>
+            <li><strong>Objetivo essencial:</strong> PWA de treinos rápido, offline-first e seguro no Cloudflare gratuito.</li>
+            <li><strong>Estado atual:</strong> Worker, D1, login, catálogo e sessão explícita estão implementados no repositório.</li>
+            <li><strong>Não desfazer:</strong> design atual, Histórico/Carga, catálogo exclusivo, RER em português e sessão única.</li>
+            <li><strong>Próxima ação:</strong> publicar, testar o fluxo autenticado e depois criar a periodização dinâmica.</li>
+            <li><strong>Antes de agir:</strong> confirmar a versão e as migrações no painel Cloudflare.</li>
           </ul>
         </div>
       </details>
